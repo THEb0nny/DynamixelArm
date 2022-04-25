@@ -1,6 +1,5 @@
 // https://emanual.robotis.com/docs/en/dxl/ax/ax-12a/
 // https://emanual.robotis.com/docs/en/parts/controller/opencm904/
-// https://emanual.robotis.com/docs/en/software/arduino_ide/#library-api
 
 #include <Dynamixel2Arduino.h>  // Подключение библиотеки Dynamixel
 #include <math.h>
@@ -10,8 +9,8 @@
 
 #define DXL_DIR_PIN 22 // Инициализация переменной, отвечащей за номер пина, подключенного к информационному пину приводов манипулятора
 #define DXL_PROTOCOL_VERSION 1.0 // Инициализация переменной, отвечащей за протокол передачи данных от OpenCM9.04 к приводам
-#define JOINT_N 6 // Количество приводов манипулятора
-#define DYNAMIXEL_GOAL_POS_ERROR 5 // Погрешность позиции для динимикселей
+#define JOINT_N 6 // Количество приводов
+#define DYNAMIXEL_GOAL_DEG_POS_ERROR 1 // Погрешность позиции для динимикселей
 
 #define EXP_BOARD_BUTTON1_PIN 16 // Пин кнопки 1 на плате расширения
 #define EXP_BOARD_BUTTON2_PIN 17 // Пин кнопки 2 на плате расширения
@@ -19,7 +18,7 @@
 #define EXP_BOARD_LED2_PIN 19 // Пин светодиода 2 на плате расширения
 #define EXP_BOARD_LED3_PIN 20 // Пин светодиода 3 на плате расширения
 
-// Длины звеньев
+// Длины звеньев манипуля
 #define LINK1 103
 #define LINK2 105
 #define LINK3 89
@@ -41,137 +40,123 @@ void setup() {
   digitalWrite(EXP_BOARD_LED1_PIN, LED_LOW); // Выключаем светодиод 1 на плате расширения
   digitalWrite(EXP_BOARD_LED2_PIN, LED_LOW); // Выключаем светодиод 2 на плате расширения
   digitalWrite(EXP_BOARD_LED3_PIN, LED_LOW); // Выключаем светодиод 3 на плате расширения
+  DEBUG_SERIAL.println("Wait press btn1...");
   //while(!DEBUG_SERIAL); // Ждём, пока монитор порта не откроется
   while(digitalRead(EXP_BOARD_BUTTON1_PIN) == 0); // Ждём, пока не будет нажата кнопка 1 на плате расширения
   DEBUG_SERIAL.println("Setup...");
   dxl.begin(1000000); // Установка скорости обмена данными по последовательному порту манипулятора
   dxl.setPortProtocolVersion(DXL_PROTOCOL_VERSION); // Выбор протокола обмена данными
-  for (byte i = 1; i <= JOINT_N; i++) { // Цикл для перебора всех приводов
+  for (int i = 1; i <= JOINT_N; i++) { // Цикл для перебора всех приводов
     while (true) {
       if(dxl.ping(i) == true) { // Проверка отвечает ли мотор
-        DEBUG_SERIAL.print("Dynamixel with ID "); DEBUG_SERIAL.print(i); DEBUG_SERIAL.print(" found, model "); DEBUG_SERIAL.print(dxl.getModelNumber(i)); DEBUG_SERIAL.println(".");
+        DEBUG_SERIAL.print("Dynamixel width ID "); DEBUG_SERIAL.print(i); DEBUG_SERIAL.print(" found, model "); DEBUG_SERIAL.print(dxl.getModelNumber(i)); DEBUG_SERIAL.println(".");
         break;
       } else {
-        DEBUG_SERIAL.print("Dynamixel with ID "); DEBUG_SERIAL.print(i); DEBUG_SERIAL.print(" not found!"); DEBUG_SERIAL.println(" Wait...");
+        DEBUG_SERIAL.print("Dynamixel width ID "); DEBUG_SERIAL.print(i); DEBUG_SERIAL.print(" not found!"); DEBUG_SERIAL.println(" Wait...");
         delay(500);
       }
     }
     dxl.torqueOff(i); // Отключение блокировки привода, чтобы установить режим работы!
     bool setDinamixelOperationMode = dxl.setOperatingMode(i, OP_POSITION); // Установка режима работы привода в качестве шарнира
     if (!setDinamixelOperationMode) {
-      DEBUG_SERIAL.print("Dynamixel wgith ID "); DEBUG_SERIAL.print(i); DEBUG_SERIAL.println("mode not set!");
+      DEBUG_SERIAL.print("Dynamixel width ID "); DEBUG_SERIAL.print(i); DEBUG_SERIAL.println("mode not set!");
     }
     delay(10);
   }
-  DEBUG_SERIAL.println("Start..."); DEBUG_SERIAL.println();
-  delay(500);
-  // Занять среднюю позицию
-  int motorsGoalPos[] = {512, 512, 512, 512, 512, 512};
+  DEBUG_SERIAL.println("Start...");
+  DEBUG_SERIAL.println();
+  // Занять среднюю позицию всем сервоприводам
+  float servosDegPos[] = {150, 150, 150, 150, 150, 150};
   for (byte i = 1; i <= JOINT_N; i++) {
-    MoveMotorToGoal(i, 50, motorsGoalPos[i]);
+    SetServoSpeed(i, 40); // Установить скорость серво
+    MoveServoToDegPos(i, servosDegPos[i]); // Устновить мотору нужную позицию
   }
-  //int* motGoalPos = new int[6];
-  //motGoalPos = GetMotorsGoalPos();
-  //WaitMotorsTakeGoalPos(motGoalPos); // Ждём, чтобы все приводы заняли позицию
-  WaitMotorsTakeGoalPos();
-  delay(500);
+  WaitServosTakePos(servosDegPos); // Ждём, чтобы все приводы заняли позицию
 }
 
 void loop() {
-  /*float* motPos = new float[3];
-  motPos = Delta_IK(0, 50, -180);
-  DEBUG_SERIAL.print("NeedMotorPos: "); DEBUG_SERIAL.print(motPos[0]); DEBUG_SERIAL.print(", "); DEBUG_SERIAL.print(motPos[1]); DEBUG_SERIAL.print(", "); DEBUG_SERIAL.println(motPos[2]);
-  motPos[0] = ConvertDegreesToGoalPos(motPos[0]);
-  motPos[1] = ConvertDegreesToGoalPos(motPos[1]);
-  motPos[2] = ConvertDegreesToGoalPos(motPos[2]);
-  DEBUG_SERIAL.print("NeedGoalPos: "); DEBUG_SERIAL.print(motPos[0]); DEBUG_SERIAL.print(", "); DEBUG_SERIAL.print(motPos[1]); DEBUG_SERIAL.print(", "); DEBUG_SERIAL.println(motPos[2]);
-  MoveMotorToGoal(1, 50, motPos[0]);
-  MoveMotorToGoal(2, 50, motPos[1]);
-  MoveMotorToGoal(3, 50, motPos[2]);
-  WaitMotorsTakeGoalPos(motPos[0], motPos[1], motPos[2]);*/
-  delay(500);
+  MoveServoToDegPos(1, 90);
+  /*
+  // Занять позицию по инвёрсной кинематике
+  // Нужно проверять работает ли
+  float* servosPos = new float[3];
+  servosPos = Manipulator_IK(100, 100, 10);
+  DEBUG_SERIAL.print("NeedServosPos: ");
+  for (byte i = 0; i < 6; i++) {
+    DEBUG_SERIAL.print(servosPos[i + 1]); DEBUG_SERIAL.print(", ");
+  }
   DEBUG_SERIAL.println();
-}
-
-int ConvertDegreesToGoalPos(float deg) {
-  // 30° - мертвая зона диномикселя
-  deg = constrain(deg, 30, 300); // Ограничиваем входное значение, где 30° - это начальный градус слева и 300°
-  float goalPos = map(deg, 330, 30, 1023, 0);
-  return goalPos;
+  MoveServosToDegPos(servosPos);
+  WaitServosTakePos(servosPos);
+  */
+  delay(2000);
 }
 
 // Ждать пока моторы не займут позиции
-
-/*
-void WaitMotorsTakeGoalPos(int *motorsPos) {
+void WaitServosTakePos(float *waitServosPos) {
   while (true) {
-    DEBUG_SERIAL.print("Motors position: ");
-    DEBUG_SERIAL.print(dxl.getPresentPosition(1)); DEBUG_SERIAL.print(", ");
-    DEBUG_SERIAL.print(dxl.getPresentPosition(2)); DEBUG_SERIAL.print(", ");
-    DEBUG_SERIAL.print(dxl.getPresentPosition(3)); DEBUG_SERIAL.print(", ");
-    DEBUG_SERIAL.print(dxl.getPresentPosition(4)); DEBUG_SERIAL.print(", ");
-    DEBUG_SERIAL.print(dxl.getPresentPosition(5)); DEBUG_SERIAL.print(", ");
-    DEBUG_SERIAL.println(dxl.getPresentPosition(6));
-    if ((motorsPos[0] - DYNAMIXEL_GOAL_POS_ERROR <= dxl.getPresentPosition(1) && dxl.getPresentPosition(1) <= motorsPos[0] + DYNAMIXEL_GOAL_POS_ERROR) && (motorsPos[1] - DYNAMIXEL_GOAL_POS_ERROR <= dxl.getPresentPosition(2) && dxl.getPresentPosition(2) <= motorsPos[1] + DYNAMIXEL_GOAL_POS_ERROR) && (motorsPos[2] - DYNAMIXEL_GOAL_POS_ERROR <= dxl.getPresentPosition(3) && dxl.getPresentPosition(3) <= motorsPos[2] + DYNAMIXEL_GOAL_POS_ERROR) && (motorsPos[3] - DYNAMIXEL_GOAL_POS_ERROR <= dxl.getPresentPosition(4) && dxl.getPresentPosition(4) <= motorsPos[3] + DYNAMIXEL_GOAL_POS_ERROR) && (motorsPos[4] - DYNAMIXEL_GOAL_POS_ERROR <= dxl.getPresentPosition(5) && dxl.getPresentPosition(5) <= motorsPos[4] + DYNAMIXEL_GOAL_POS_ERROR)) {
-      break;
+    int* servosPos = GetServosDegPos();
+    DEBUG_SERIAL.print("Current servos position: ");
+    for (byte i = 0; i < 6; i++) {
+      DEBUG_SERIAL.print(servosPos[i + 1]); DEBUG_SERIAL.print(", ");
     }
-    //delay(500);
-  }
-  DEBUG_SERIAL.print("Motors performed position: ");
-  DEBUG_SERIAL.print(dxl.getPresentPosition(1)); DEBUG_SERIAL.print(", ");
-  DEBUG_SERIAL.print(dxl.getPresentPosition(2)); DEBUG_SERIAL.print(", ");
-  DEBUG_SERIAL.print(dxl.getPresentPosition(3)); DEBUG_SERIAL.print(", ");
-  DEBUG_SERIAL.print(dxl.getPresentPosition(4)); DEBUG_SERIAL.print(", ");
-  DEBUG_SERIAL.print(dxl.getPresentPosition(5)); DEBUG_SERIAL.print(", ");
-  DEBUG_SERIAL.println(dxl.getPresentPosition(6));
-}
-*/
-
-void WaitMotorsTakeGoalPos() {
-  int motorsGoalPos[JOINT_N];
-  for (byte i = 0; i <= JOINT_N; i++) {
-    motorsGoalPos[i] = dxl.readControlTableItem(PRESENT_POSITION, i + 1);
-  }
-  while (true) {
-    DEBUG_SERIAL.print("Motors position: ");
-    DEBUG_SERIAL.print(dxl.getPresentPosition(1)); DEBUG_SERIAL.print(", ");
-    DEBUG_SERIAL.print(dxl.getPresentPosition(2)); DEBUG_SERIAL.print(", ");
-    DEBUG_SERIAL.print(dxl.getPresentPosition(3)); DEBUG_SERIAL.print(", ");
-    DEBUG_SERIAL.print(dxl.getPresentPosition(4)); DEBUG_SERIAL.print(", ");
-    DEBUG_SERIAL.print(dxl.getPresentPosition(5)); DEBUG_SERIAL.print(", ");
-    DEBUG_SERIAL.println(dxl.getPresentPosition(6));
-    if ((motorsGoalPos[0] - DYNAMIXEL_GOAL_POS_ERROR <= dxl.getPresentPosition(1) && dxl.getPresentPosition(1) <= motorsGoalPos[0] + DYNAMIXEL_GOAL_POS_ERROR) && (motorsGoalPos[1] - DYNAMIXEL_GOAL_POS_ERROR <= dxl.getPresentPosition(2) && dxl.getPresentPosition(2) <= motorsGoalPos[1] + DYNAMIXEL_GOAL_POS_ERROR) && (motorsGoalPos[2] - DYNAMIXEL_GOAL_POS_ERROR <= dxl.getPresentPosition(3) && dxl.getPresentPosition(3) <= motorsGoalPos[2] + DYNAMIXEL_GOAL_POS_ERROR) && (motorsGoalPos[3] - DYNAMIXEL_GOAL_POS_ERROR <= dxl.getPresentPosition(4) && dxl.getPresentPosition(4) <= motorsGoalPos[3] + DYNAMIXEL_GOAL_POS_ERROR) && (motorsGoalPos[4] - DYNAMIXEL_GOAL_POS_ERROR <= dxl.getPresentPosition(5) && dxl.getPresentPosition(5) <= motorsGoalPos[4] + DYNAMIXEL_GOAL_POS_ERROR)) {
-      break;
+    DEBUG_SERIAL.println();
+    bool* servosIsPerformed = new bool[JOINT_N];
+    for (byte i = 0; i < 6; i++) { // Проверяем условие и записываем в массив для каждого отдельного серво
+      servosIsPerformed[i + 1] = waitServosPos[i] - DYNAMIXEL_GOAL_DEG_POS_ERROR <= servosPos[i] && servosPos[i] <= waitServosPos[i] + DYNAMIXEL_GOAL_DEG_POS_ERROR;
     }
-    //delay(500);
+    if (servosIsPerformed[0] && servosIsPerformed[1] && servosIsPerformed[2] && servosIsPerformed[3] && servosIsPerformed[4]) break; // Если все условия выполнились, то выйти из цикла
+    delay(10);
   }
-  DEBUG_SERIAL.print("Motors performed position: ");
-  DEBUG_SERIAL.print(dxl.getPresentPosition(1)); DEBUG_SERIAL.print(", ");
-  DEBUG_SERIAL.print(dxl.getPresentPosition(2)); DEBUG_SERIAL.print(", ");
-  DEBUG_SERIAL.print(dxl.getPresentPosition(3)); DEBUG_SERIAL.print(", ");
-  DEBUG_SERIAL.print(dxl.getPresentPosition(4)); DEBUG_SERIAL.print(", ");
-  DEBUG_SERIAL.print(dxl.getPresentPosition(5)); DEBUG_SERIAL.print(", ");
-  DEBUG_SERIAL.println(dxl.getPresentPosition(6));
+  int* servosPos = GetServosDegPos();
+  DEBUG_SERIAL.print("Motors performed position: "); // Моторы заняли позиции
+  for (byte i = 0; i < 6; i++) {
+    DEBUG_SERIAL.print(servosPos[i + 1]); DEBUG_SERIAL.print(", ");
+  }
+  DEBUG_SERIAL.println();
 }
 
-// Задать позицию для диномикселя
-void MoveMotorToGoal(byte motorId, byte speed, byte goalPos) {
-  dxl.setGoalVelocity(motorId, speed); // Задание целевой скорости
-  dxl.setGoalPosition(motorId, goalPos); // Задание целевого положения
-  //dxl.setGoalPosition(1, 512); //use default encoder value
-  //dxl.setGoalPosition(2, 45.0, UNIT_DEGREE); // Use angle in degree
+// Установить скорость сервоприводу
+void SetServoSpeed(byte servoId, int speed) {
+  dxl.setGoalVelocity(servoId, speed); // Задание целевой скорости
+}
+
+// Сервоприводу занять позицию
+void MoveServoToDegPos(byte servoId, float posDeg) {
+  dxl.setGoalPosition(servoId, posDeg, UNIT_DEGREE); // Задание целевого положения
+}
+
+// Сервоприводам занять позиции
+void MoveServosToDegPos(float *servosPos) {
+  for (byte i = 0; i < JOINT_N; i++) {
+    MoveServoToDegPos(i + 1, servosPos[i]);
+  }
+}
+
+// Получить от серво его угол
+int GetServoDegPos(byte servoId) {
+  return dxl.getPresentPosition(servoId, UNIT_DEGREE);
+}
+
+// Получить значения углов с сервоприводов
+int* GetServosDegPos() {
+  int *degPos = new int[JOINT_N];
+  for (int i = 0; i <= JOINT_N; i++) {
+    degPos[i] = GetServoDegPos(i + 1);
+  }
+  return degPos;
 }
 
 // Функция обратной кинематики
-float* Manipulator_IK(float x, float y, float z, float X_V, float Y_V, float Z_V) {
+float* Manipulator_IK(float x, float y, float z) {
   float a1 = atan(y / x);
-  float k = sqrt(pow(x, 2) + pow(y, 2));
+  float a5 = a1;
+  float k = sqrt (x * x) + (y * y);
   float z_solve = z + LINK4 - LINK1;
-  float d = sqrt(pow(k, 2) + pow(z_solve, 2));
+  float d = sqrt (k * k) + (z_solve * z_solve);
   float a2 = (3.14 / 2) - (atan(z_solve / k) + acos((d * d) + (LINK2 * LINK2) - (LINK3 * LINK3)) / (2 *  d * LINK2));
   float a3 = 3.14 - acos(((-d * -d) + (LINK2 * LINK2) - (LINK3 * LINK3)) / (2 * LINK2 * LINK3));
   float a4 = 3.14 - (a2 - a3);
-  float a5 = a1;
   float *ik = new float[5];
   ik[0] = a1, ik[1] = a2, ik[2] = a3, ik[3] = a4, ik[4] = a5;
   return ik;
@@ -192,13 +177,4 @@ float* Manipulator_FK(float a1, float a2, float a3, float a4) {
   float *fk = new float[2];
   fk[0] = x, fk[1] = y;
   return fk;
-}
-
-// Получить значения углов с моторов
-int* GetMotorsGoalPos() {
-  int *goalsPos = new int[JOINT_N];
-  for (int i = 0; i < JOINT_N; i++) {
-    goalsPos[i] = dxl.getPresentPosition(i + 1);
-  }
-  return goalsPos;
 }
