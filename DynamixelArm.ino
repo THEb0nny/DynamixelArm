@@ -121,6 +121,13 @@ void SetServoSpeed(byte servoId, int speed) {
   dxl.setGoalVelocity(servoId, speed); // Задание целевой скорости
 }
 
+// Установить скорость сервоприводам
+void SetServosSpeed(float *servosSpeed) {
+  for (byte i = 0; i < JOINT_N; i++) {
+    dxl.setGoalVelocity(i + 1, servosSpeed[i]); // Задание целевой скорости
+  }
+}
+
 // Сервоприводу занять позицию
 void MoveServoToDegPos(byte servoId, float posDeg) {
   dxl.setGoalPosition(servoId, posDeg, UNIT_DEGREE); // Задание целевого положения
