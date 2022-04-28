@@ -30,6 +30,8 @@
 
 Dynamixel2Arduino dxl(DXL_SERIAL, DXL_DIR_PIN); // Инициализация указателя на команды из библиотеки Dynamixel
 
+byte workMode = 1; // Режим управления
+
 void setup() {
   DEBUG_SERIAL.begin(57600); // Установка скорости обмена данными по последовательному порту компьютера
   pinMode(EXP_BOARD_BUTTON1_PIN, INPUT_PULLDOWN); // Установка режима кнопки 1 на плате расширения
@@ -42,7 +44,16 @@ void setup() {
   digitalWrite(EXP_BOARD_LED3_PIN, LED_LOW); // Выключаем светодиод 3 на плате расширения
   DEBUG_SERIAL.println("Wait press btn1...");
   //while(!DEBUG_SERIAL); // Ждём, пока монитор порта не откроется
-  while(digitalRead(EXP_BOARD_BUTTON1_PIN) == 0); // Ждём, пока не будет нажата кнопка 1 на плате расширения
+  while(true) {
+    if (digitalRead(EXP_BOARD_BUTTON1_PIN) == 0) { // Автоматический режим демонтрации
+      workMode = 1;
+      break; // Кнопка 1 на плате расширения
+    }
+    if (digitalRead(EXP_BOARD_BUTTON2_PIN) == 0) { // Режим управления
+      workMode = 2;
+      break; // Кнопка 2 на плате расширения
+    }
+  }
   DEBUG_SERIAL.println("Setup...");
   dxl.begin(1000000); // Установка скорости обмена данными по последовательному порту манипулятора
   dxl.setPortProtocolVersion(DXL_PROTOCOL_VERSION); // Выбор протокола обмена данными
