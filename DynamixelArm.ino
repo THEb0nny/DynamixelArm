@@ -123,6 +123,13 @@ void loop() {
   }
 }
 
+int ConvertDegreesToGoalPos(float degPos) {
+  // 30, 270 - мертвые зоны диномикселя
+  degPos = constrain(degPos, 30, 300); // Ограничиваем входное значение, где 30° - это начальный градус слева и 300°
+  float goalPos = map(degPos, 330, 30, 1023, 0);
+  return goalPos;
+}
+
 // Ждать пока сервомоторы не займут позиции
 void WaitMotorsTakeGoalPos(float *waitServosPos) { 
   int* servosPos = new int[JOINT_N];
