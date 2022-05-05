@@ -13,7 +13,7 @@
 #define DXL_DIR_PIN 22 // Инициализация переменной, отвечащей за номер пина, подключенного к информационному пину приводов манипулятора
 #define DXL_PROTOCOL_VERSION 1.0 // Инициализация переменной, отвечащей за протокол передачи данных от OpenCM9.04 к приводам
 #define JOINT_N 6 // Количество приводов
-#define DYNAMIXEL_GOAL_DEG_POS_ERROR 1 // Погрешность позиции для динимикселей
+#define DYNAMIXEL_GOAL_POS_ERROR 1 // Погрешность позиции для динимикселей
 #define MAX_TIME_PERFORMED_POS 3000 // Максимальное время для занятия ошибка, защита
 
 #define EXP_BOARD_BUTTON1_PIN 16 // Пин кнопки 1 на плате расширения
@@ -95,7 +95,6 @@ void setup() {
 
 void loop() {
   MoveServoToPos(1, 90);
-  /*
   // Занять позицию по инвёрсной кинематике
   // Нужно проверять работает ли
   float* servosPos = new float[3];
@@ -104,11 +103,6 @@ void loop() {
   for (byte i = 0; i < 6; i++) {
     DEBUG_SERIAL.print(servosPos[i + 1]); DEBUG_SERIAL.print(", ");
   }
-  DEBUG_SERIAL.println();
-  MoveServosToDegPos(servosPos);
-  WaitServosTakePos(servosPos);
-  */
-  delay(2000);
 }
 
 int ConvertDegreesToGoalPos(float degPos) {
@@ -166,6 +160,13 @@ void SetServosSpeed(float *servosSpeed) {
   }
 }
 
+// Установить скорость всем сервоприводам
+void SetAllServosSpeed(int speed) {
+  for (byte i = 0; i < JOINT_N; i++) {
+    dxl.setGoalVelocity(i + 1, speed); // Задание целевой скорости
+  }
+}
+
 // Сервоприводу занять позицию
 void MoveServoToPos(byte servoId, float posDeg) {
   dxl.setGoalPosition(servoId, posDeg); // Задание целевого положения
@@ -176,6 +177,7 @@ void MoveServosToPos(float *servosPos) {
   for (byte i = 0; i < JOINT_N; i++) {
     dxl.setGoalPosition(i + 1, servosPos[i]); // Задание целевого положения
   }
+  if (waitPerformedPos) WaitMotorsTakeGoalPos(servosPos);
 }
 
 // Получить от серво его угол
@@ -207,7 +209,7 @@ int* GetServosDegPos() {
   for (int i = 0; i <= JOINT_N; i++) {
     degPos[i] = GetServoPos(i + 1);
   }
-  return degPos;
+  return pos;
 }
 
 // Функция обратной кинематики
