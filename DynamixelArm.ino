@@ -173,11 +173,11 @@ void MoveServoToPos(byte servoId, float posDeg) {
 }
 
 // Сервоприводам занять позиции
-void MoveServosToPos(float *servosPos) {
+void MoveServosToPos(float *servosPos, bool waitPerformedPos) {
   for (byte i = 0; i < JOINT_N; i++) {
     dxl.setGoalPosition(i + 1, servosPos[i]); // Задание целевого положения
   }
-  if (waitPerformedPos) WaitMotorsTakeGoalPos(servosPos);
+  if (waitPerformedPos) WaitServosPosPerformed();
 }
 
 // Получить от серво его угол
@@ -194,6 +194,15 @@ int* GetServosPos() {
   return pos;
 }
 
+// Получить значения углов с сервоприводов
+int* GetServosDegPos() {
+  int *pos = new int[JOINT_N];
+  for (int i = 0; i <= JOINT_N; i++) {
+    pos[i] = dxl.getPresentPosition(i + 1);
+  }
+  return pos;
+}
+
 // Получить значения о движения моторов
 bool* GetServosMoving() {
   bool *moving = new bool[JOINT_N];
@@ -201,15 +210,6 @@ bool* GetServosMoving() {
     moving[i] = dxl.readControlTableItem(MOVING, i + 1);
   }
   return moving;
-}
-
-// Получить значения углов с сервоприводов
-int* GetServosDegPos() {
-  int *degPos = new int[JOINT_N];
-  for (int i = 0; i <= JOINT_N; i++) {
-    degPos[i] = GetServoPos(i + 1);
-  }
-  return pos;
 }
 
 // Функция обратной кинематики
