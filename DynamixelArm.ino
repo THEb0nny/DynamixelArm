@@ -7,6 +7,8 @@
 
 #define DEBUG_LEVEL 2 // Уровень дебага
 
+#define MAX_INPUT_VAL_IN_MANUAL_CONTROL 4 // Максимальное количество значений в строку монитора порта при ручном управлении
+
 #define DEBUG_SERIAL Serial // Установка константы, отвечающей за последовательный порт, подключаемый к компьютеру
 #define DXL_SERIAL Serial3 // OpenCM9.04 EXP Board's DXL port Serial. (To use the DXL port on the OpenCM 9.04 board, you must use Serial1 for Serial. And because of the OpenCM 9.04 driver code, you must call Serial1.setDxlMode(true); before dxl.begin();.)
 
@@ -242,4 +244,90 @@ float* Manipulator_FK(float a1, float a2, float a3, float a4) {
   float *fk = new float[2];
   fk[0] = x, fk[1] = y;
   return fk;
+}
+
+// Управление из Serial
+void ManualControl(int type) {
+  int x = 0, y = 0, z = 0, tool;
+  int oldX = x, oldY = y, oldZ = z, oldTool = tool;
+  bool control = true;
+  int* servosPos = new int[JOINT_N];
+  while (control) {
+    String inputValues[MAX_INPUT_VAL_IN_MANUAL_CONTROL]; // Массив входящей строки
+    String key[MAX_INPUT_VAL_IN_MANUAL_CONTROL]; // Массив ключей
+    int values[MAX_INPUT_VAL_IN_MANUAL_CONTROL]; // Массив значений
+    if (Serial.available() > 2) { // Если есть доступные данные
+      // Встроенная функция readStringUntil будет читать все данные, пришедшие в UART до специального символа — '\n' (перенос строки).
+      // Он появляется в паре с '\r' (возврат каретки) при передаче данных функцией Serial.println().
+      // Эти символы удобно передавать для разделения команд, но не очень удобно обрабатывать. Удаляем их функцией trim().
+      String inputStr = Serial.readStringUntil('\n');
+      inputStr.trim(); // Чистим символы
+      char strBuffer[32]; // Создаём пустой массив символов
+      inputStr.toCharArray(strBuffer, 32); // Перевести строку в массив символов
+      // Считываем x и y разделённых пробелом, а также Z и инструментом
+      for (byte i = 0; i < MAX_INPUT_VAL_IN_MANUAL_CONTROL; i++) {
+        inputValues[i] = (i == 0 ? String(strtok(strBuffer, " ")) : String(strtok(NULL, " ")));
+        inputValues[i].replace(" ", ""); // Убрать возможные пробелы между символами
+        /*
+        Serial.print(inputValues[i]? inputValues[i] : "null");
+        if (i < MAX_INPUT_VAL_IN_MANUAL_CONTROL - 1) Serial.print(", ");
+        else Serial.println();
+        */
+      }
+      for (byte i = 0; i < MAX_INPUT_VAL_IN_MANUAL_CONTROL; i++) {
+        String inputValue = inputValues[i];
+        byte strIndex = inputValue.length(); // Переменая для хронения индекса вхождения цифры в входной строке, изначально равна размеру строки
+        for (byte i = 0; i < 10; i++) { // Поиск первого вхождения цифры от 0 по 9 в подстроку
+          byte index = inputValue.indexOf(String(i)); // Узнаём индекс, где нашли цифру параметра цикла
+          if (index < strIndex && index != 255) strIndex = index; // Если индекс цифры меньше strIndex, то обновляем strIndex 
+        }
+        key[i] = inputValue.substring(0, strIndex); // Записываем ключ с начала строки до первой цицры
+        values[i] = (inputValue.substring(strIndex, inputValue.length())).toInt(); // Записываем значение с начала цифры до конца строки
+        if (key[i] == "x" && type == 1) {
+          if (x != values[i]) x = values[i]; // Записываем X
+        } else if (key[i] == "y" && type == 1) {
+          if (y != values[i]) y = values[i]; // Записываем Y
+        } else if (key[i] == "z" && type == 1) {
+          if (z != values[i]) z = values[i]; // Записываем Z
+        } else if (key[i] == "1" && type == 2) {
+          if (servosPos[0] != values[i]) servosPos[0] = values[i];
+        } else if (key[i] == "2" && type == 2) {
+          if (servosPos[0] != values[i]) servosPos[1] = values[i];
+        } else if (key[i] == "3" && type == 2) {
+          if (servosPos[0] != values[i]) servosPos[2] = values[i];
+        } else if (key[i] == "4" && type == 2) {
+          if (servosPos[0] != values[i]) servosPos[3] = values[i];
+        } else if (key[i] == "5" && type == 2) {
+          if (servosPos[0] != values[i]) servosPos[4] = values[i];
+        } else if (key[i] == "6" && type == 2) {
+          if (servosPos[0] != values[i]) servosPos[5] = values[i];
+        } else if (key[i] == "break") {
+          Serial.println(key[i]);
+          control = false;
+          break;
+        }
+        if (key[i].length() > 0) {
+          Serial.print(key[i]); Serial.print(" = "); Serial.println(values[i]); // Печать ключ и значение, если ключ существует
+        }
+      }
+      if (type == 1) { // Тип работы по координатам X и Y
+        /*
+        if (x != oldX || y != oldY) { // Если какое-то из значений x или y обновилось
+          MoveToPosCoreXY(x, y);
+          oldX = x; oldY = y;
+          Serial.print("xVal: "); Serial.print(x); Serial.print(", "); Serial.print("yVal: "); Serial.println(y);
+        }
+        */
+      } else if (type == 2) { // Тип работы по ячейкам
+        /*
+        if (col != oldCol || row != oldRow) { // Если какое-то из значений col или row обновилось
+          MoveToPosCoreXY(cellsPosX[col], cellsPosY[row]);
+          oldCol = col; oldRow = row;
+          Serial.print("row: "); Serial.print(row); Serial.print(", "); Serial.print("col: "); Serial.println(col);
+          Serial.print("cellsPosX: "); Serial.print(cellsPosX[row]); Serial.print(", "); Serial.print("cellsPosY: "); Serial.println(cellsPosY[col]);
+        }
+        */
+      }
+    }
+  }
 }
