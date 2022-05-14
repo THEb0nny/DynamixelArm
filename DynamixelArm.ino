@@ -123,7 +123,7 @@ void WaitServosPosPerformed() {
   servosWorksMaxTimeTimer.reset();
   if (DEBUG_LEVEL >= 1) DEBUG_SERIAL.println("Current servos position: ");
   while (true) {
-    int* servosPos = GetServosPos();
+    servosPos = GetServosPos();
     bool* isMoving = GetServosMoving();
     if (DEBUG_LEVEL >= 1) {
       for (byte i = 0; i < JOINT_N; i++) {
