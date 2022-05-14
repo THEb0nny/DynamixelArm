@@ -196,13 +196,9 @@ int* GetServosPos() {
   return pos;
 }
 
-// Получить значения углов с сервоприводов
-int* GetServosDegPos() {
-  int *pos = new int[JOINT_N];
-  for (int i = 0; i <= JOINT_N; i++) {
-    pos[i] = dxl.getPresentPosition(i + 1);
-  }
-  return pos;
+// Получить значения о движения моторов
+bool GetServoMoving(byte servoId) {
+  return dxl.readControlTableItem(MOVING, servoId);
 }
 
 // Получить значения о движения моторов
