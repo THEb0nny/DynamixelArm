@@ -5,7 +5,7 @@
 #include <math.h>
 #include "GyverTimer.h"
 
-#define DEBUG_LEVEL 2 // Уровень дебага
+#define DEBUG_LEVEL 1 // Уровень дебага
 
 #define MAX_INPUT_VAL_IN_MANUAL_CONTROL 4 // Максимальное количество значений в строку монитора порта при ручном управлении
 
@@ -51,8 +51,7 @@ void setup() {
   digitalWrite(EXP_BOARD_LED1_PIN, LED_LOW); // Выключаем светодиод 1 на плате расширения
   digitalWrite(EXP_BOARD_LED2_PIN, LED_LOW); // Выключаем светодиод 2 на плате расширения
   digitalWrite(EXP_BOARD_LED3_PIN, LED_LOW); // Выключаем светодиод 3 на плате расширения
-  DEBUG_SERIAL.println("Wait press btn1...");
-  //while(!DEBUG_SERIAL); // Ждём, пока монитор порта не откроется
+  DEBUG_SERIAL.println("Wait press btn1 or btn2...");
   while(true) {
     if (digitalRead(EXP_BOARD_BUTTON1_PIN) == 0) { // Автоматический режим демонтрации
       workMode = 1;
@@ -64,32 +63,34 @@ void setup() {
     }
   }
   DEBUG_SERIAL.println("Setup...");
-  dxl.begin(1000000); // Установка скорости обмена данными по последовательному порту манипулятора
+  dxl.begin(57600); // Установка скорости обмена данными по последовательному порту манипулятора
   dxl.setPortProtocolVersion(DXL_PROTOCOL_VERSION); // Выбор протокола обмена данными
-  for (int i = 1; i <= JOINT_N; i++) { // Цикл для перебора всех приводов
+  for (int i = 0; i < JOINT_N; i++) { // Цикл для перебора всех приводов
     while (true) {
-      if(dxl.ping(i) == true) { // Проверка отвечает ли мотор
-        DEBUG_SERIAL.print("Dynamixel width ID "); DEBUG_SERIAL.print(i); DEBUG_SERIAL.print(" found, model "); DEBUG_SERIAL.print(dxl.getModelNumber(i)); DEBUG_SERIAL.println(".");
+      if(dxl.ping(i + 1) == true) { // Проверка отвечает ли мотор
+        DEBUG_SERIAL.print("Dynamixel width ID "); DEBUG_SERIAL.print(i + 1); DEBUG_SERIAL.print(" found, model "); DEBUG_SERIAL.print(dxl.getModelNumber(i + 1)); DEBUG_SERIAL.println(".");
+        dxl.setBaudrate(i + 1, 57600); // Установка битрейта
         break;
       } else {
-        DEBUG_SERIAL.print("Dynamixel width ID "); DEBUG_SERIAL.print(i); DEBUG_SERIAL.print(" not found!"); DEBUG_SERIAL.println(" Wait...");
+        DEBUG_SERIAL.print("Dynamixel width ID "); DEBUG_SERIAL.print(i + 1); DEBUG_SERIAL.print(" not found!"); DEBUG_SERIAL.println(" Wait...");
         delay(500);
       }
     }
-    dxl.torqueOff(i + 1); // Отключение крутящего момента, чтобы установить режим работы!
-    bool setDinamixelOperationMode = dxl.setOperatingMode(i, OP_POSITION); // Установка режима работы привода в качестве шарнира
-    if (!setDinamixelOperationMode) {
-      DEBUG_SERIAL.print("Dynamixel width ID "); DEBUG_SERIAL.print(i); DEBUG_SERIAL.println("mode not set!");
+    while (true) { // Установить режим работы
+      dxl.torqueOff(i + 1); // Отключение крутящего момента, чтобы установить режим работы!
+      bool setDinamixelOperationMode = dxl.setOperatingMode(i + 1, OP_POSITION); // Установка режима работы привода в качестве шарнира
+      if (!setDinamixelOperationMode) {
+        DEBUG_SERIAL.print("Dynamixel width ID "); DEBUG_SERIAL.print(i + 1); DEBUG_SERIAL.println("mode not set!");
+      } else break;
+      delay(10);
     }
     dxl.torqueOn(i + 1); // Включение крутящего момента
-    delay(10);
   }
-  DEBUG_SERIAL.println("Start...");
-  DEBUG_SERIAL.println();
+  DEBUG_SERIAL.print("Start... Work mode is "); DEBUG_SERIAL.println(workMode);
+  SetAllServosSpeed(40); // Установить всем сервоприводам скорость
   // Занять среднюю позицию всем сервоприводам
-  float servosDegPos[] = {150, 150, 150, 150, 150, 150};
+  float servosDegPos[] = {512, 512, 512, 512, 512, 512};
   for (byte i = 0; i < JOINT_N; i++) {
-    SetServoSpeed(i + 1, 40); // Установить скорость серво
     MoveServoToPos(i + 1, servosDegPos[i]); // Устновить мотору нужную позицию
   }
   WaitServosPosPerformed(); // Ждём, чтобы все приводы заняли позицию
@@ -110,7 +111,7 @@ void loop() {
 int ConvertDegreesToGoalPos(float degPos) {
   // 30, 300 - мертвые зоны диномикселя
   degPos = constrain(degPos, 30, 300); // Ограничиваем входное значение, где 30° - это начальный градус слева и 300°
-  float goalPos = map(degPos, 300, 30, 1023, 0);
+  int goalPos = map(degPos, 300, 30, 1023, 0);
   return goalPos;
 }
 
@@ -138,15 +139,17 @@ void WaitServosPosPerformed() {
         else DEBUG_SERIAL.println();
       }
     }
-    if ((isMoving[0] == 0 && isMoving[1] == 0 && isMoving[2] == 0) || servosWorksMaxTimeTimer.isReady()) break; // Если все условия выполнились по серво или превышено максимальное время по таймеру, то выйти из цикла
-    delay(150);
-    
+    // Если все условия выполнились по серво или превышено максимальное время по таймеру, то выйти из цикла
+    if ((isMoving[0] == 0 && isMoving[1] == 0 && isMoving[2] == 0) || servosWorksMaxTimeTimer.isReady()) break;
+    delay(100);
   }
-  DEBUG_SERIAL.print("Motors performed position: ");
-  for (byte i = 0; i < JOINT_N; i++) {
-    DEBUG_SERIAL.print(servosPos[i]);
-    if (i < JOINT_N - 1) DEBUG_SERIAL.print(", ");
-    else DEBUG_SERIAL.println();
+  if (DEBUG_LEVEL >= 1) {
+    DEBUG_SERIAL.print("Motors performed position: ");
+    for (byte i = 0; i < JOINT_N; i++) {
+      DEBUG_SERIAL.print(servosPos[i]);
+      if (i < JOINT_N - 1) DEBUG_SERIAL.print(", ");
+      else DEBUG_SERIAL.println();
+    }
   }
 }
 
@@ -179,7 +182,7 @@ void MoveServosToPos(float *servosPos, bool waitPerformedPos) {
   for (byte i = 0; i < JOINT_N; i++) {
     dxl.setGoalPosition(i + 1, servosPos[i]); // Задание целевого положения
   }
-  if (waitPerformedPos) WaitServosPosPerformed();
+  if (waitPerformedPos) WaitServosPosPerformed(); // Если нужно, ждать занятия сервоприводами позиции
 }
 
 // Получить от серво его угол
@@ -203,11 +206,11 @@ bool GetServoMoving(byte servoId) {
 
 // Получить значения о движения моторов
 bool* GetServosMoving() {
-  bool *moving = new bool[JOINT_N];
+  bool *movingStates = new bool[JOINT_N];
   for (byte i = 0; i < JOINT_N; i++) {
-    moving[i] = dxl.readControlTableItem(MOVING, i + 1);
+    movingStates[i] = dxl.readControlTableItem(MOVING, i + 1);
   }
-  return moving;
+  return movingStates;
 }
 
 // Функция обратной кинематики
@@ -264,11 +267,11 @@ void ManualControl(int type) {
       for (byte i = 0; i < MAX_INPUT_VAL_IN_MANUAL_CONTROL; i++) {
         inputValues[i] = (i == 0 ? String(strtok(strBuffer, " ")) : String(strtok(NULL, " ")));
         inputValues[i].replace(" ", ""); // Убрать возможные пробелы между символами
-        /*
-        Serial.print(inputValues[i]? inputValues[i] : "null");
-        if (i < MAX_INPUT_VAL_IN_MANUAL_CONTROL - 1) Serial.print(", ");
-        else Serial.println();
-        */
+        if (DEBUG_LEVEL >= 2) {
+          Serial.print(inputValues[i]? inputValues[i] : "null");
+          if (i < MAX_INPUT_VAL_IN_MANUAL_CONTROL - 1) Serial.print(", ");
+          else Serial.println();
+        }
       }
       for (byte i = 0; i < MAX_INPUT_VAL_IN_MANUAL_CONTROL; i++) {
         String inputValue = inputValues[i];
