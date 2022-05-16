@@ -7,7 +7,7 @@
 
 #define DEBUG_LEVEL 2 // Уровень дебага
 
-#define MAX_INPUT_VAL_IN_MANUAL_CONTROL 4 // Максимальное количество значений в строку монитора порта при ручном управлении
+#define MAX_INPUT_VAL_IN_MANUAL_CONTROL 6 // Максимальное количество значений в строку монитора порта при ручном управлении
 
 #define DEBUG_SERIAL Serial // Установка константы, отвечающей за последовательный порт, подключаемый к компьютеру
 #define DXL_SERIAL Serial3 // OpenCM9.04 EXP Board's DXL port Serial. (To use the DXL port on the OpenCM 9.04 board, you must use Serial1 for Serial. And because of the OpenCM 9.04 driver code, you must call Serial1.setDxlMode(true); before dxl.begin();.)
@@ -298,7 +298,7 @@ void ManualControl(int type) {
       String inputStr = Serial.readStringUntil('\n');
       inputStr.trim(); // Чистим символы
       char strBuffer[99]; // Создаём пустой массив символов
-      inputStr.toCharArray(strBuffer, 99); // Перевести строку в массив символов
+      inputStr.toCharArray(strBuffer, 99); // Перевести строку в массив символов последующего разделения по пробелам
       // Считываем x и y разделённых пробелом, а также Z и инструментом
       for (byte i = 0; i < MAX_INPUT_VAL_IN_MANUAL_CONTROL; i++) {
         inputValues[i] = (i == 0 ? String(strtok(strBuffer, " ")) : String(strtok(NULL, " ")));
@@ -310,14 +310,11 @@ void ManualControl(int type) {
         }
       }
       for (byte i = 0; i < MAX_INPUT_VAL_IN_MANUAL_CONTROL; i++) {
-        String inputValue = inputValues[i];
-        byte strIndex = inputValue.length(); // Переменая для хронения индекса вхождения цифры в входной строке, изначально равна размеру строки
-        for (byte i = 0; i < 10; i++) { // Поиск первого вхождения цифры от 0 по 9 в подстроку
-          byte index = inputValue.indexOf(String(i)); // Узнаём индекс, где нашли цифру параметра цикла
-          if (index < strIndex && index != 255) strIndex = index; // Если индекс цифры меньше strIndex, то обновляем strIndex 
-        }
-        key[i] = inputValue.substring(0, strIndex); // Записываем ключ с начала строки до первой цицры
-        values[i] = (inputValue.substring(strIndex, inputValue.length())).toInt(); // Записываем значение с начала цифры до конца строки
+        String inputValue = inputValues[i]; // Записываем в строку обрезанную часть пробелами
+        byte separatorIndexTmp = inputValue.indexOf("=");
+        byte separatorIndex = (separatorIndexTmp != 255 ? separatorIndexTmp : inputValue.length());
+        key[i] = inputValue.substring(0, separatorIndex - 1); // Записываем ключ с начала строки до знака равно
+        values[i] = (inputValue.substring(separatorIndex + 1, inputValue.length())).toInt(); // Записываем значение с начала цифры до конца строки
         if (key[i] == "x" && type == 1) {
           if (x != values[i]) x = values[i]; // Записываем X
         } else if (key[i] == "y" && type == 1) {
