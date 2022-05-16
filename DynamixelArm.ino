@@ -79,6 +79,7 @@ void setup() {
         if (serialPrintTimer.isReady()) {
           DEBUG_SERIAL.print("Dynamixel width ID "); DEBUG_SERIAL.print(i + 1); DEBUG_SERIAL.print(" not found!"); DEBUG_SERIAL.println(" Wait...");
         }
+        delay(10);
       }
     }
     while (true) { // Установить режим работы
