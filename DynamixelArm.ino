@@ -323,17 +323,17 @@ void ManualControl(int type) {
           if (y != values[i]) y = values[i]; // Записываем Y
         } else if (key[i] == "z" && type == 1) {
           if (z != values[i]) z = values[i]; // Записываем Z
-        } else if (key[i] == "one" && type == 2) {
+        } else if (key[i] == "m1" && type == 2) {
           if (servosPos[0] != values[i]) servosPos[0] = values[i];
-        } else if (key[i] == "two" && type == 2) {
+        } else if (key[i] == "m2" && type == 2) {
           if (servosPos[1] != values[i]) servosPos[1] = values[i];
-        } else if (key[i] == "three" && type == 2) {
+        } else if (key[i] == "m3" && type == 2) {
           if (servosPos[2] != values[i]) servosPos[2] = values[i];
-        } else if (key[i] == "four" && type == 2) {
+        } else if (key[i] == "m4" && type == 2) {
           if (servosPos[3] != values[i]) servosPos[3] = values[i];
-        } else if (key[i] == "five" && type == 2) {
+        } else if (key[i] == "m5" && type == 2) {
           if (servosPos[4] != values[i]) servosPos[4] = values[i];
-        } else if (key[i] == "six" && type == 2) {
+        } else if (key[i] == "m6" && type == 2) {
           if (servosPos[5] != values[i]) servosPos[5] = values[i];
         } else if (key[i] == "break") {
           Serial.println(key[i]);
@@ -356,7 +356,8 @@ void ManualControl(int type) {
         }
       } else if (type == 2) { // Тип работы по позициям на диномиксели
         if (servosPos[0] != servosPosOld[0] || servosPos[1] != servosPosOld[1] || servosPos[2] != servosPosOld[2] || servosPos[3] != servosPosOld[3] || servosPos[4] != servosPosOld[4] || servosPos[5] != servosPosOld[5] || servosPos[6] != servosPosOld[6]) {
-          MoveServosToPos(servosPos, true);
+          MoveServosToPos(servosPos, false);
+          delay(4000); // Ожидание по времени вместо ожидания пока займут позицию
           for (byte i = 0; i < JOINT_N; i++) { // Перезаписать значения старых позиций для следующей итерации
             servosPosOld[i] = servosPos[i];
           }
