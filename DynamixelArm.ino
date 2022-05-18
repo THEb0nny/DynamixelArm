@@ -95,7 +95,8 @@ void setup() {
   SetAllServosSpeed(60); // Установить всем сервоприводам скорость
   // Занять среднюю позицию всем сервоприводам
   int presentServosPos[] = {512, 512, 512, 512, 512, 0};
-  MoveServosToPos(presentServosPos, true);
+  MoveServosToPos(presentServosPos, false);
+  delay(4000);
 }
 
 void loop() {
