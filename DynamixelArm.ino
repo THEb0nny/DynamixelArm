@@ -148,7 +148,7 @@ void WaitServosPosPerformed() {
     // Если все условия выполнились по серво или превышено максимальное время по таймеру, то выйти из цикла
     // (servosIsPerformed[0] && servosIsPerformed[1] && servosIsPerformed[2]) && 
     if ((isMoving[0] == 0 && isMoving[1] == 0 && isMoving[2] == 0 && isMoving[3] == 0 && isMoving[4] == 0 && isMoving[5] == 0) || servosWorksMaxTimeTimer.isReady()) break;
-    delay(100);
+    delay(50);
   }
   if (DEBUG_LEVEL >= 1) {
     DEBUG_SERIAL.print("Motors performed position: ");
