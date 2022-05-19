@@ -100,7 +100,7 @@ void setup() {
 }
 
 void loop() {
-  ManualControl(1);
+  ManualControl(workMode);
   while(true);
 }
 
@@ -307,16 +307,19 @@ void ManualControl(int type) {
         inputValues[i] = (i == 0 ? String(strtok(strBuffer, " ")) : String(strtok(NULL, " ")));
         inputValues[i].replace(" ", ""); // Убрать возможные пробелы между символами
         if (DEBUG_LEVEL >= 2) {
-          Serial.print(inputValues[i] != "" ? inputValues[i] : "");
-          if (i < MAX_INPUT_VAL_IN_MANUAL_CONTROL - 1) Serial.print(", ");
-          else Serial.println();
+          if (inputValues[i] != "") {
+            if (i > 0) Serial.print(", ");
+            Serial.print(inputValues[i]);
+          }
+          if (i == MAX_INPUT_VAL_IN_MANUAL_CONTROL - 1) Serial.println();
         }
       }
       for (byte i = 0; i < MAX_INPUT_VAL_IN_MANUAL_CONTROL; i++) {
+        if (inputValues[i] == "") continue; // Если значение пустое, то перейти на следующий шаг цикла
         String inputValue = inputValues[i]; // Записываем в строку обрезанную часть пробелами
         byte separatorIndexTmp = inputValue.indexOf("=");
         byte separatorIndex = (separatorIndexTmp != 255 ? separatorIndexTmp : inputValue.length());
-        key[i] = inputValue.substring(0, separatorIndex - 1); // Записываем ключ с начала строки до знака равно
+        key[i] = inputValue.substring(0, separatorIndex); // Записываем ключ с начала строки до знака равно
         values[i] = (inputValue.substring(separatorIndex + 1, inputValue.length())).toInt(); // Записываем значение с начала цифры до конца строки
         if (key[i] == "x" && type == 1) {
           if (x != values[i]) x = values[i]; // Записываем X
