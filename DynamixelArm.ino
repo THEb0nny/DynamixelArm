@@ -116,7 +116,7 @@ void WaitServosPosPerformed() {
   int* presentServosPos = new int[JOINT_N]; // Массив для текущих значений на сервоприводах
   int* targetServosPos = GetServosTargetPos(); // Получить целевые позиции с сервоприводов
   bool* isMoving = GetServosMoving(); // Массив значений о движении сервоприводов
-  bool* servosIsPerformed = new bool[JOINT_N]; // Массив состояния о занятии позиции сервоприводами
+  //bool* servosIsPerformed = new bool[JOINT_N]; // Массив состояния о занятии позиции сервоприводами
   servosWorksMaxTimeTimer.setTimeout(MAX_TIME_PERFORMED_POS); // Установка времени таймера защиты по максимальному времени, запуск таймера
   servosWorksMaxTimeTimer.reset(); // Спросить таймера защиты
   serialPrintTimer.setInterval(500); // Установить таймер печати
@@ -159,7 +159,12 @@ void WaitServosPosPerformed() {
     }
   }
   serialPrintTimer.stop(); // Остановить таймер печати
-  DEBUG_SERIAL.flush();
+  // СМОТРИ ТУТ ОЧИСТКУ
+  // Объекты, созданные с помощью new, обязательно должны быть уничтожены с помощью delete, а массивы, созданные с помощью new[], должны быть удалены с помощью delete[].
+  delete[] presentServosPos;
+  delete[] targetServosPos;
+  delete[] isMoving;
+  //delete[] servosIsPerformed;
 }
 
 // Установить скорость сервоприводу
@@ -211,8 +216,11 @@ int GetServoPos(byte servoId) {
 }
 
 // Получить значения углов с сервоприводов
-int* GetServosPos() {
-  int *pos = new int[JOINT_N];
+int* GetServosPos() { // int *GetServosPos() {
+  //https://bestprogrammer.ru/programmirovanie-i-razrabotka/vozvrat-massiva-iz-funktsii-c
+  //https://ru.stackoverflow.com/questions/526433/%D0%9A%D0%B0%D0%BA-%D0%BF%D0%B5%D1%80%D0%B5%D0%B4%D0%B0%D1%82%D1%8C-%D0%BC%D0%B0%D1%81%D1%81%D0%B8%D0%B2-%D0%B2-%D1%84%D1%83%D0%BD%D0%BA%D1%86%D0%B8%D1%8E-%D0%B8-%D0%B2%D0%B5%D1%80%D0%BD%D1%83%D1%82%D1%8C-%D0%B5%D0%B3%D0%BE
+  //int *pos = new int[JOINT_N];
+  int* pos = new int[JOINT_N];
   for (byte i = 0; i < JOINT_N; i++) {
     pos[i] = dxl.getPresentPosition(i + 1);
   }
@@ -225,8 +233,9 @@ bool GetServoMoving(byte servoId) {
 }
 
 // Получить значения о движении сервоприводов
-bool* GetServosMoving() {
-  bool *movingStates = new bool[JOINT_N];
+bool* GetServosMoving() { // bool *GetServosMoving() {
+  //bool *movingStates = new bool[JOINT_N];
+  bool* movingStates = new bool[JOINT_N];
   for (byte i = 0; i < JOINT_N; i++) {
     movingStates[i] = dxl.readControlTableItem(MOVING, i + 1);
   }
@@ -239,8 +248,8 @@ int GetServoTargetPos(byte servoId) {
 }
 
 // Получить целевые значения с сервоприводов
-int* GetServosTargetPos() {
-  int *targetPos = new int[JOINT_N];
+int* GetServosTargetPos() { // int *GetServosTargetPos() {
+  int *targetPos = new int[JOINT_N]; // int* targetPos = new int[JOINT_N];
   for (byte i = 0; i < JOINT_N; i++) {
     targetPos[i] = dxl.readControlTableItem(GOAL_POSITION, i + 1);
   }
@@ -265,6 +274,7 @@ float* Manipulator_IK(float x, float y, float z) {
   Serial.println(a4);
   float a5 = a1;
   float *ik = new float[JOINT_N - 1];
+  //int *arr = (int*)malloc(sizeof(int)*N);
   ik[0] = a1, ik[1] = a2, ik[2] = a3, ik[3] = a4, ik[4] = a5;
   return ik;
 }
