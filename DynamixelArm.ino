@@ -1,5 +1,7 @@
 // https://emanual.robotis.com/docs/en/dxl/ax/ax-12a/
 // https://emanual.robotis.com/docs/en/parts/controller/opencm904/
+// https://bestprogrammer.ru/programmirovanie-i-razrabotka/vozvrat-massiva-iz-funktsii-c
+// https://ru.stackoverflow.com/questions/526433/
 
 #include <Dynamixel2Arduino.h>  // Подключение библиотеки Dynamixel
 #include <math.h>
@@ -95,13 +97,11 @@ void setup() {
   SetAllServosSpeed(60); // Установить всем сервоприводам скорость
   // Занять среднюю позицию всем сервоприводам
   float presentServosPos[] = {512, 512, 512, 512, 512, -1};
-  MoveServosToPos(presentServosPos, false);
-  delay(4000);
+  MoveServosToPos(presentServosPos, true);
 }
 
 void loop() {
   ManualControl(workMode);
-  while(true);
 }
 
 int ConvertDegreesToGoalPos(float degPos) {
@@ -113,17 +113,15 @@ int ConvertDegreesToGoalPos(float degPos) {
 
 // Ждать пока сервомоторы не займут позиции
 void WaitServosPosPerformed() {
-  int* presentServosPos = new int[JOINT_N]; // Массив для текущих значений на сервоприводах
+  int* presentServosPos = new int[JOINT_N];
   int* targetServosPos = GetServosTargetPos(); // Получить целевые позиции с сервоприводов
-  bool* isMoving = GetServosMoving(); // Массив значений о движении сервоприводов
-  //bool* servosIsPerformed = new bool[JOINT_N]; // Массив состояния о занятии позиции сервоприводами
   servosWorksMaxTimeTimer.setTimeout(MAX_TIME_PERFORMED_POS); // Установка времени таймера защиты по максимальному времени, запуск таймера
   servosWorksMaxTimeTimer.reset(); // Спросить таймера защиты
-  serialPrintTimer.setInterval(500); // Установить таймер печати
+  serialPrintTimer.setInterval(200); // Установить таймер печати
   serialPrintTimer.reset(); // Спросить таймер печати
   if (DEBUG_LEVEL >= 1) DEBUG_SERIAL.println("Current servos position: ");
   while (true) {
-    presentServosPos = GetServosPos(); // Прочитать значения с диномикселей
+    int* presentServosPos = GetServosPos(); // Прочитать значения с диномикселей
     if (DEBUG_LEVEL >= 1 && serialPrintTimer.isReady()) {
       for (byte i = 0; i < JOINT_N; i++) { // Вывод текущих положений с сервоприводов
         DEBUG_SERIAL.print(presentServosPos[i]);
@@ -131,7 +129,7 @@ void WaitServosPosPerformed() {
         else DEBUG_SERIAL.println();
       }
     }
-    isMoving = GetServosMoving(); // Прочитать значения о состоянии движений
+    bool* isMoving = GetServosMoving(); // Прочитать значения о состоянии движений
     if (DEBUG_LEVEL >= 2 && serialPrintTimer.isReady()) {
       for (byte i = 0; i < JOINT_N; i++) { // Вывод значений о движении сервоприводов
         DEBUG_SERIAL.print(isMoving[i]); // 1 - движение, 0 - движения нет
@@ -141,30 +139,37 @@ void WaitServosPosPerformed() {
     }
     /*
     // Проверяем, допустима ли ошибка
+    //bool* servosIsPerformed = new bool[JOINT_N]; // Массив состояния о занятии позиции сервоприводами
     for (byte i = 0; i < JOINT_N; i++) { // Проверяем условие и записываем в массив для каждого отдельного серво
       servosIsPerformed[i] = (targetServosPos[i] - DYNAMIXEL_GOAL_POS_ERROR <= presentServosPos[i] && presentServosPos[i] <= targetServosPos[i] + DYNAMIXEL_GOAL_POS_ERROR);
     }
     */
     // Если все условия выполнились по серво или превышено максимальное время по таймеру, то выйти из цикла
     // (servosIsPerformed[0] && servosIsPerformed[1] && servosIsPerformed[2]) && 
-    if ((isMoving[0] == 0 && isMoving[1] == 0 && isMoving[2] == 0 && isMoving[3] == 0 && isMoving[4] == 0 && isMoving[5] == 0) || servosWorksMaxTimeTimer.isReady()) break;
+    if ((isMoving[0] == 0 && isMoving[1] == 0 && isMoving[2] == 0 && isMoving[3] == 0 && isMoving[4] == 0 && isMoving[5] == 0) || servosWorksMaxTimeTimer.isReady()) {
+      if (DEBUG_LEVEL >= 1) {
+        DEBUG_SERIAL.print("Motors performed position: ");
+        for (byte i = 0; i < JOINT_N; i++) {
+          DEBUG_SERIAL.print(presentServosPos[i]);
+          if (i < JOINT_N - 1) DEBUG_SERIAL.print(", ");
+          else DEBUG_SERIAL.println();
+        }
+      }
+      // Удалить массивы перед выходом из цикла     
+      delete[] isMoving;
+      delete[] presentServosPos;
+      //delete[] targetServosPos;
+      //delete[] servosIsPerformed;
+      break;
+    }
+    // Удаляем массивы
+    delete[] presentServosPos;
+    delete[] isMoving;
+    //delete[] targetServosPos;
+    //delete[] servosIsPerformed;
     delay(50);
   }
-  if (DEBUG_LEVEL >= 1) {
-    DEBUG_SERIAL.print("Motors performed position: ");
-    for (byte i = 0; i < JOINT_N; i++) {
-      DEBUG_SERIAL.print(presentServosPos[i]);
-      if (i < JOINT_N - 1) DEBUG_SERIAL.print(", ");
-      else DEBUG_SERIAL.println();
-    }
-  }
   serialPrintTimer.stop(); // Остановить таймер печати
-  // СМОТРИ ТУТ ОЧИСТКУ
-  // Объекты, созданные с помощью new, обязательно должны быть уничтожены с помощью delete, а массивы, созданные с помощью new[], должны быть удалены с помощью delete[].
-  delete[] presentServosPos;
-  delete[] targetServosPos;
-  delete[] isMoving;
-  //delete[] servosIsPerformed;
 }
 
 // Установить скорость сервоприводу
@@ -216,10 +221,7 @@ int GetServoPos(byte servoId) {
 }
 
 // Получить значения углов с сервоприводов
-int* GetServosPos() { // int *GetServosPos() {
-  //https://bestprogrammer.ru/programmirovanie-i-razrabotka/vozvrat-massiva-iz-funktsii-c
-  //https://ru.stackoverflow.com/questions/526433/%D0%9A%D0%B0%D0%BA-%D0%BF%D0%B5%D1%80%D0%B5%D0%B4%D0%B0%D1%82%D1%8C-%D0%BC%D0%B0%D1%81%D1%81%D0%B8%D0%B2-%D0%B2-%D1%84%D1%83%D0%BD%D0%BA%D1%86%D0%B8%D1%8E-%D0%B8-%D0%B2%D0%B5%D1%80%D0%BD%D1%83%D1%82%D1%8C-%D0%B5%D0%B3%D0%BE
-  //int *pos = new int[JOINT_N];
+int* GetServosPos() {
   int* pos = new int[JOINT_N];
   for (byte i = 0; i < JOINT_N; i++) {
     pos[i] = dxl.getPresentPosition(i + 1);
@@ -233,8 +235,7 @@ bool GetServoMoving(byte servoId) {
 }
 
 // Получить значения о движении сервоприводов
-bool* GetServosMoving() { // bool *GetServosMoving() {
-  //bool *movingStates = new bool[JOINT_N];
+bool* GetServosMoving() {
   bool* movingStates = new bool[JOINT_N];
   for (byte i = 0; i < JOINT_N; i++) {
     movingStates[i] = dxl.readControlTableItem(MOVING, i + 1);
@@ -248,8 +249,8 @@ int GetServoTargetPos(byte servoId) {
 }
 
 // Получить целевые значения с сервоприводов
-int* GetServosTargetPos() { // int *GetServosTargetPos() {
-  int *targetPos = new int[JOINT_N]; // int* targetPos = new int[JOINT_N];
+int* GetServosTargetPos() {
+  int* targetPos = new int[JOINT_N];
   for (byte i = 0; i < JOINT_N; i++) {
     targetPos[i] = dxl.readControlTableItem(GOAL_POSITION, i + 1);
   }
@@ -259,7 +260,6 @@ int* GetServosTargetPos() { // int *GetServosTargetPos() {
 // Функция обратной кинематики
 float* Manipulator_IK(float x, float y, float z) {
   float a1 = atan(y / x);
-  //Serial.println(a1);
   float k = sqrt(pow(x, 2) + pow(y, 2));
   Serial.println(k);
   float z_solve = z + LINK4 - LINK1;
@@ -274,7 +274,6 @@ float* Manipulator_IK(float x, float y, float z) {
   Serial.println(a4);
   float a5 = a1;
   float *ik = new float[JOINT_N - 1];
-  //int *arr = (int*)malloc(sizeof(int)*N);
   ik[0] = a1, ik[1] = a2, ik[2] = a3, ik[3] = a4, ik[4] = a5;
   return ik;
 }
@@ -359,6 +358,8 @@ void ManualControl(int type) {
         } else if (key[i] == "break") {
           Serial.println(key[i]);
           control = false;
+          delete[] servosPos;
+          delete[] servosPosOld;
           break;
         }
         if (key[i].length() > 0) {
@@ -377,8 +378,7 @@ void ManualControl(int type) {
         }
       } else if (type == 2) { // Тип работы по позициям на диномиксели
         if (servosPos[0] != servosPosOld[0] || servosPos[1] != servosPosOld[1] || servosPos[2] != servosPosOld[2] || servosPos[3] != servosPosOld[3] || servosPos[4] != servosPosOld[4] || servosPos[5] != servosPosOld[5] || servosPos[6] != servosPosOld[6]) {
-          MoveServosToPos(servosPos, false);
-          delay(4000); // Ожидание по времени вместо ожидания пока займут позицию
+          MoveServosToPos(servosPos, true);
           for (byte i = 0; i < JOINT_N; i++) { // Перезаписать значения старых позиций для следующей итерации
             servosPosOld[i] = servosPos[i];
           }
