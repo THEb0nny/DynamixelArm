@@ -41,7 +41,7 @@ Dynamixel2Arduino dxl(DXL_SERIAL, DXL_DIR_PIN); // Инициализация у
 GTimer servosWorksMaxTimeTimer(MS); // Инициализация таймера защиты максимального времени цикла ожидания занятия позиции сервопривода
 GTimer serialPrintTimer(MS);
 
-using namespace ControlTableItem;
+using namespace ControlTableItem; // Пространство имён для обращения к параметрам диномикселей
 
 byte workMode = 1; // Режим управления
 
@@ -102,159 +102,6 @@ void setup() {
 
 void loop() {
   ManualControl(workMode);
-}
-
-int ConvertDegreesToGoalPos(float degPos) {
-  // 30, 300 - мертвые зоны диномикселя
-  degPos = constrain(degPos, 30, 300); // Ограничиваем входное значение, где 30° - это начальный градус слева и 300°
-  int goalPos = map(degPos, 30, 300, 0, 1024);
-  return goalPos;
-}
-
-// Ждать пока сервомоторы не займут позиции
-void WaitServosPosPerformed() {
-  int* presentServosPos = new int[JOINT_N];
-  int* targetServosPos = GetServosTargetPos(); // Получить целевые позиции с сервоприводов
-  servosWorksMaxTimeTimer.setTimeout(MAX_TIME_PERFORMED_POS); // Установка времени таймера защиты по максимальному времени, запуск таймера
-  servosWorksMaxTimeTimer.reset(); // Спросить таймера защиты
-  serialPrintTimer.setInterval(200); // Установить таймер печати
-  serialPrintTimer.reset(); // Спросить таймер печати
-  if (DEBUG_LEVEL >= 1) DEBUG_SERIAL.println("Current servos position: ");
-  while (true) {
-    int* presentServosPos = GetServosPos(); // Прочитать значения с диномикселей
-    if (DEBUG_LEVEL >= 1 && serialPrintTimer.isReady()) {
-      for (byte i = 0; i < JOINT_N; i++) { // Вывод текущих положений с сервоприводов
-        DEBUG_SERIAL.print(presentServosPos[i]);
-        if (i < JOINT_N - 1) DEBUG_SERIAL.print(", ");
-        else DEBUG_SERIAL.println();
-      }
-    }
-    bool* isMoving = GetServosMoving(); // Прочитать значения о состоянии движений
-    if (DEBUG_LEVEL >= 2 && serialPrintTimer.isReady()) {
-      for (byte i = 0; i < JOINT_N; i++) { // Вывод значений о движении сервоприводов
-        DEBUG_SERIAL.print(isMoving[i]); // 1 - движение, 0 - движения нет
-        if (i < JOINT_N - 1) DEBUG_SERIAL.print(", ");
-        else DEBUG_SERIAL.println();
-      }
-    }
-    /*
-    // Проверяем, допустима ли ошибка
-    //bool* servosIsPerformed = new bool[JOINT_N]; // Массив состояния о занятии позиции сервоприводами
-    for (byte i = 0; i < JOINT_N; i++) { // Проверяем условие и записываем в массив для каждого отдельного серво
-      servosIsPerformed[i] = (targetServosPos[i] - DYNAMIXEL_GOAL_POS_ERROR <= presentServosPos[i] && presentServosPos[i] <= targetServosPos[i] + DYNAMIXEL_GOAL_POS_ERROR);
-    }
-    */
-    // Если все условия выполнились по серво или превышено максимальное время по таймеру, то выйти из цикла
-    // (servosIsPerformed[0] && servosIsPerformed[1] && servosIsPerformed[2]) && 
-    if ((isMoving[0] == 0 && isMoving[1] == 0 && isMoving[2] == 0 && isMoving[3] == 0 && isMoving[4] == 0 && isMoving[5] == 0) || servosWorksMaxTimeTimer.isReady()) {
-      if (DEBUG_LEVEL >= 1) {
-        DEBUG_SERIAL.print("Motors performed position: ");
-        for (byte i = 0; i < JOINT_N; i++) {
-          DEBUG_SERIAL.print(presentServosPos[i]);
-          if (i < JOINT_N - 1) DEBUG_SERIAL.print(", ");
-          else DEBUG_SERIAL.println();
-        }
-      }
-      // Удалить массивы перед выходом из цикла     
-      delete[] isMoving;
-      delete[] presentServosPos;
-      //delete[] targetServosPos;
-      //delete[] servosIsPerformed;
-      break;
-    }
-    // Удаляем массивы
-    delete[] presentServosPos;
-    delete[] isMoving;
-    //delete[] targetServosPos;
-    //delete[] servosIsPerformed;
-    delay(50);
-  }
-  serialPrintTimer.stop(); // Остановить таймер печати
-}
-
-// Установить скорость сервоприводу
-void SetServoSpeed(byte servoId, int speed) {
-  bool status = dxl.setGoalVelocity(servoId, speed); // Задание целевой скорости
-  //if (status) DEBUG_SERIAL.println();
-}
-
-// Установить скорость сервоприводам
-void SetServosSpeed(float *servosSpeed) {
-  for (byte i = 0; i < JOINT_N; i++) {
-    bool status = dxl.setGoalVelocity(i + 1, servosSpeed[i]); // Задание целевой скорости
-    //if (status) DEBUG_SERIAL.println();
-  }
-}
-
-// Установить скорость всем сервоприводам
-void SetAllServosSpeed(int speed) {
-  for (byte i = 0; i < JOINT_N; i++) {
-    bool status = dxl.setGoalVelocity(i + 1, speed); // Задание целевой скорости
-    //if (status) DEBUG_SERIAL.println();
-  }
-}
-
-// Сервоприводу занять позицию
-void MoveServoToPos(byte servoId, float posDeg) {
-  bool status = dxl.setGoalPosition(servoId, posDeg); // Задание целевого положения
-  //if (status) DEBUG_SERIAL.println();
-}
-
-// Сервоприводам занять позиции
-void MoveServosToPos(float *servosTargetPos, bool waitPerformedPos) {
-  if (DEBUG_LEVEL >= 1) DEBUG_SERIAL.print("Target servos pos: ");
-  for (byte i = 0; i < JOINT_N; i++) {
-    if (servosTargetPos[i] != -1 && servosTargetPos[i] < 1023) { // Пропустить шаг цикла, если значение для него с массива 0-е
-      bool status = dxl.setGoalPosition(i + 1, servosTargetPos[i]); // Задание целевого положения
-      //if (status) DEBUG_SERIAL.println();
-      DEBUG_SERIAL.print(servosTargetPos[i]);
-    } else DEBUG_SERIAL.print("null");
-    if (i < JOINT_N - 1) DEBUG_SERIAL.print(", ");
-    else DEBUG_SERIAL.println();
-  }
-  if (waitPerformedPos) WaitServosPosPerformed(); // Если нужно, ждать занятия сервоприводами позиции
-}
-
-// Получить от серво его угол
-int GetServoPos(byte servoId) {
-  return dxl.getPresentPosition(servoId);
-}
-
-// Получить значения углов с сервоприводов
-int* GetServosPos() {
-  int* pos = new int[JOINT_N];
-  for (byte i = 0; i < JOINT_N; i++) {
-    pos[i] = dxl.getPresentPosition(i + 1);
-  }
-  return pos;
-}
-
-// Получить значения о движения сервопривода
-bool GetServoMoving(byte servoId) {
-  return dxl.readControlTableItem(MOVING, servoId);
-}
-
-// Получить значения о движении сервоприводов
-bool* GetServosMoving() {
-  bool* movingStates = new bool[JOINT_N];
-  for (byte i = 0; i < JOINT_N; i++) {
-    movingStates[i] = dxl.readControlTableItem(MOVING, i + 1);
-  }
-  return movingStates;
-}
-
-// Получить целевое значение с сервопривода
-int GetServoTargetPos(byte servoId) {
-  return dxl.readControlTableItem(GOAL_POSITION, servoId);
-}
-
-// Получить целевые значения с сервоприводов
-int* GetServosTargetPos() {
-  int* targetPos = new int[JOINT_N];
-  for (byte i = 0; i < JOINT_N; i++) {
-    targetPos[i] = dxl.readControlTableItem(GOAL_POSITION, i + 1);
-  }
-  return targetPos;
 }
 
 // Функция обратной кинематики
@@ -386,4 +233,157 @@ void ManualControl(int type) {
       }
     }
   }
+}
+
+int ConvertDegreesToGoalPos(float degPos) {
+  // 30, 300 - мертвые зоны диномикселя
+  degPos = constrain(degPos, 30, 300); // Ограничиваем входное значение, где 30° - это начальный градус слева и 300°
+  int goalPos = map(degPos, 30, 300, 0, 1024);
+  return goalPos;
+}
+
+// Установить скорость сервоприводу
+void SetServoSpeed(byte servoId, int speed) {
+  bool status = dxl.setGoalVelocity(servoId, speed); // Задание целевой скорости
+  //if (status) DEBUG_SERIAL.println();
+}
+
+// Установить скорость сервоприводам
+void SetServosSpeed(float *servosSpeed) {
+  for (byte i = 0; i < JOINT_N; i++) {
+    bool status = dxl.setGoalVelocity(i + 1, servosSpeed[i]); // Задание целевой скорости
+    //if (status) DEBUG_SERIAL.println();
+  }
+}
+
+// Установить скорость всем сервоприводам
+void SetAllServosSpeed(int speed) {
+  for (byte i = 0; i < JOINT_N; i++) {
+    bool status = dxl.setGoalVelocity(i + 1, speed); // Задание целевой скорости
+    //if (status) DEBUG_SERIAL.println();
+  }
+}
+
+// Сервоприводу занять позицию
+void MoveServoToPos(byte servoId, float posDeg) {
+  bool status = dxl.setGoalPosition(servoId, posDeg); // Задание целевого положения
+  //if (status) DEBUG_SERIAL.println();
+}
+
+// Сервоприводам занять позиции
+void MoveServosToPos(float *servosTargetPos, bool waitPerformedPos) {
+  if (DEBUG_LEVEL >= 1) DEBUG_SERIAL.print("Target servos pos: ");
+  for (byte i = 0; i < JOINT_N; i++) {
+    if (servosTargetPos[i] != -1 && servosTargetPos[i] < 1023) { // Пропустить шаг цикла, если значение для него с массива 0-е
+      bool status = dxl.setGoalPosition(i + 1, servosTargetPos[i]); // Задание целевого положения
+      //if (status) DEBUG_SERIAL.println();
+      DEBUG_SERIAL.print(servosTargetPos[i]);
+    } else DEBUG_SERIAL.print("null");
+    if (i < JOINT_N - 1) DEBUG_SERIAL.print(", ");
+    else DEBUG_SERIAL.println();
+  }
+  if (waitPerformedPos) WaitServosPosPerformed(); // Если нужно, ждать занятия сервоприводами позиции
+}
+
+// Получить от серво его угол
+int GetServoPos(byte servoId) {
+  return dxl.getPresentPosition(servoId);
+}
+
+// Получить значения углов с сервоприводов
+int* GetServosPos() {
+  int* pos = new int[JOINT_N];
+  for (byte i = 0; i < JOINT_N; i++) {
+    pos[i] = dxl.getPresentPosition(i + 1);
+  }
+  return pos;
+}
+
+// Получить значения о движения сервопривода
+bool GetServoMoving(byte servoId) {
+  return dxl.readControlTableItem(MOVING, servoId);
+}
+
+// Получить значения о движении сервоприводов
+bool* GetServosMoving() {
+  bool* movingStates = new bool[JOINT_N];
+  for (byte i = 0; i < JOINT_N; i++) {
+    movingStates[i] = dxl.readControlTableItem(MOVING, i + 1);
+  }
+  return movingStates;
+}
+
+// Получить целевое значение с сервопривода
+int GetServoTargetPos(byte servoId) {
+  return dxl.readControlTableItem(GOAL_POSITION, servoId);
+}
+
+// Получить целевые значения с сервоприводов
+int* GetServosTargetPos() {
+  int* targetPos = new int[JOINT_N];
+  for (byte i = 0; i < JOINT_N; i++) {
+    targetPos[i] = dxl.readControlTableItem(GOAL_POSITION, i + 1);
+  }
+  return targetPos;
+}
+
+// Ждать пока сервомоторы не займут позиции
+void WaitServosPosPerformed() {
+  int* presentServosPos = new int[JOINT_N];
+  int* targetServosPos = GetServosTargetPos(); // Получить целевые позиции с сервоприводов
+  servosWorksMaxTimeTimer.setTimeout(MAX_TIME_PERFORMED_POS); // Установка времени таймера защиты по максимальному времени, запуск таймера
+  servosWorksMaxTimeTimer.reset(); // Спросить таймера защиты
+  serialPrintTimer.setInterval(200); // Установить таймер печати
+  serialPrintTimer.reset(); // Спросить таймер печати
+  if (DEBUG_LEVEL >= 1) DEBUG_SERIAL.println("Current servos position: ");
+  while (true) {
+    int* presentServosPos = GetServosPos(); // Прочитать значения с диномикселей
+    if (DEBUG_LEVEL >= 1 && serialPrintTimer.isReady()) {
+      for (byte i = 0; i < JOINT_N; i++) { // Вывод текущих положений с сервоприводов
+        DEBUG_SERIAL.print(presentServosPos[i]);
+        if (i < JOINT_N - 1) DEBUG_SERIAL.print(", ");
+        else DEBUG_SERIAL.println();
+      }
+    }
+    bool* isMoving = GetServosMoving(); // Прочитать значения о состоянии движений
+    if (DEBUG_LEVEL >= 2 && serialPrintTimer.isReady()) {
+      for (byte i = 0; i < JOINT_N; i++) { // Вывод значений о движении сервоприводов
+        DEBUG_SERIAL.print(isMoving[i]); // 1 - движение, 0 - движения нет
+        if (i < JOINT_N - 1) DEBUG_SERIAL.print(", ");
+        else DEBUG_SERIAL.println();
+      }
+    }
+    /*
+    // Проверяем, допустима ли ошибка
+    bool* servosIsPerformed = new bool[JOINT_N]; // Массив состояния о занятии позиции сервоприводами
+    for (byte i = 0; i < JOINT_N; i++) { // Проверяем условие и записываем в массив для каждого отдельного серво
+      servosIsPerformed[i] = (targetServosPos[i] - DYNAMIXEL_GOAL_POS_ERROR <= presentServosPos[i] && presentServosPos[i] <= targetServosPos[i] + DYNAMIXEL_GOAL_POS_ERROR);
+    }
+    */
+    // Если все условия выполнились по серво или превышено максимальное время по таймеру, то выйти из цикла
+    // (servosIsPerformed[0] && servosIsPerformed[1] && servosIsPerformed[2]) && 
+    if ((isMoving[0] == 0 && isMoving[1] == 0 && isMoving[2] == 0 && isMoving[3] == 0 && isMoving[4] == 0 && isMoving[5] == 0) || servosWorksMaxTimeTimer.isReady()) {
+      if (DEBUG_LEVEL >= 1) {
+        DEBUG_SERIAL.print("Motors performed position: ");
+        for (byte i = 0; i < JOINT_N; i++) {
+          DEBUG_SERIAL.print(presentServosPos[i]);
+          if (i < JOINT_N - 1) DEBUG_SERIAL.print(", ");
+          else DEBUG_SERIAL.println();
+        }
+      }
+      // Удалить массивы перед выходом из цикла для очистки памяти
+      delete[] presentServosPos;
+      delete[] isMoving;
+      //delete[] targetServosPos;
+      //delete[] servosIsPerformed;
+      break;
+    }
+    // Удаляем массивы для очистки памяти
+    delete[] presentServosPos;
+    delete[] isMoving;
+    //delete[] targetServosPos;
+    //delete[] servosIsPerformed;
+    delay(50);
+  }
+  serialPrintTimer.stop(); // Остановить таймер печати
 }
