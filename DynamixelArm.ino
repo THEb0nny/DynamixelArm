@@ -28,10 +28,11 @@
 #define EXP_BOARD_LED3_PIN 20 // Пин светодиода 3 на плате расширения
 
 // Длины звеньев манипуля
-#define LINK1 103
+#define LINK1 102.5
 #define LINK2 105
-#define LINK3 89
-#define LINK4 168
+#define LINK3 79.5
+#define LINK4 65.2
+#define LINK5 100.6
 
 // Для светодиодов на плате расширения, которые от земли
 #define LED_HIGH LOW
@@ -106,20 +107,22 @@ void loop() {
 
 // Функция обратной кинематики
 float* Manipulator_IK(float x, float y, float z) {
-  float a1 = atan(y / x);
+  float a1 = degrees(atan(y / x));
   float k = sqrt(pow(x, 2) + pow(y, 2));
-  Serial.println(k);
-  float z_solve = z + LINK4 - LINK1;
-  Serial.println(z_solve);
+  float z_solve = z + LINK4 + LINK5 - LINK1;
   float d = sqrt(pow(k, 2) + pow(z_solve, 2));
-  Serial.println(d);
-  float a2 = (PI / 2) - (atan(z_solve / k) + acos((pow(d, 2) + pow(LINK2, 2) - pow(LINK3, 2)) / (2 *  d * LINK2)));
-  Serial.println(a2);
-  float a3 = PI - acos((pow(-d, 2) + pow(LINK2, 2) + pow(LINK3, 2)) / (2 * LINK2 * LINK3));
-  Serial.println(a3);
-  float a4 = PI - (a2 + a3);
-  Serial.println(a4);
+  float a2 = 90 - (degrees(atan(z_solve / k)) + degrees(acos((pow(d, 2) + pow(LINK2, 2) - pow(LINK3, 2)) / (2 *  d * LINK2))));
+  float a3 = 180 - degrees(acos((-pow(d, 2) + pow(LINK2, 2) + pow(LINK3, 2)) / (2 * LINK2 * LINK3)));
+  float a4 = 180 - (a2 + a3);
   float a5 = a1;
+  if (DEBUG_LEVEL >= 2) {
+    Serial.print("k = "); Serial.println(k);
+    Serial.print("z_solve = "); Serial.println(z_solve);
+    Serial.print("d = "); Serial.println(d);
+    Serial.print("a2 = "); Serial.println(a2);
+    Serial.print("a3 = "); Serial.println(a3);
+    Serial.print("a4 = "); Serial.println(a4);
+  }
   float *ik = new float[JOINT_N - 1];
   ik[0] = a1, ik[1] = a2, ik[2] = a3, ik[3] = a4, ik[4] = a5;
   return ik;
