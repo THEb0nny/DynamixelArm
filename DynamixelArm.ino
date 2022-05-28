@@ -194,17 +194,29 @@ void ManualControl(int type) {
         } else if (key[i] == "z" && type == 1) {
           if (z != values[i]) z = values[i]; // Записываем Z
         } else if (key[i] == "m1" && type == 2) {
+          if (servosPos[0] != values[i]) servosPos[0] = ConvertDegreesToGoalPos(values[i]);
+        } else if (key[i] == "m1r" && type == 2) {
           if (servosPos[0] != values[i]) servosPos[0] = values[i];
         } else if (key[i] == "m2" && type == 2) {
-          if (servosPos[1] != values[i]) servosPos[1] = values[i];
+          if (servosPos[1] != values[i]) servosPos[1] = ConvertDegreesToGoalPos(values[i]);
+        } else if (key[i] == "m2r" && type == 2) {
+          if (servosPos[0] != values[i]) servosPos[1] = values[i];
         } else if (key[i] == "m3" && type == 2) {
-          if (servosPos[2] != values[i]) servosPos[2] = values[i];
+          if (servosPos[2] != values[i]) servosPos[2] = ConvertDegreesToGoalPos(values[i]);
+        } else if (key[i] == "m3r" && type == 2) {
+          if (servosPos[0] != values[i]) servosPos[2] = values[i];
         } else if (key[i] == "m4" && type == 2) {
-          if (servosPos[3] != values[i]) servosPos[3] = values[i];
+          if (servosPos[3] != values[i]) servosPos[3] = ConvertDegreesToGoalPos(values[i]);
+        } else if (key[i] == "m4r" && type == 2) {
+          if (servosPos[0] != values[i]) servosPos[3] = values[i];
         } else if (key[i] == "m5" && type == 2) {
-          if (servosPos[4] != values[i]) servosPos[4] = values[i];
+          if (servosPos[4] != values[i]) servosPos[4] = ConvertDegreesToGoalPos(values[i]);
+        } else if (key[i] == "m5r" && type == 2) {
+          if (servosPos[0] != values[i]) servosPos[4] = values[i];
         } else if (key[i] == "m6" && type == 2) {
-          if (servosPos[5] != values[i]) servosPos[5] = values[i];
+          if (servosPos[5] != values[i]) servosPos[5] = ConvertDegreesToGoalPos(values[i]);
+        } else if (key[i] == "m6r" && type == 2) {
+          if (servosPos[0] != values[i]) servosPos[5] = values[i];
         } else if (key[i] == "break") {
           Serial.println(key[i]);
           control = false;
@@ -216,13 +228,16 @@ void ManualControl(int type) {
           Serial.print(key[i]); Serial.print(" = "); Serial.println(values[i]); // Печать ключ и значение, если ключ существует
         }
       }
-      if (type == 1) { // Тип работы по координатам X и Y
+      if (type == 1) { // Тип работы по координатам X, Y, Z
         servosPos = Manipulator_IK(x, y, z);
-        for(byte i = 0; i < JOINT_N - 1; i++) {
-          Serial.print(servosPos[i]);
-          if (i < JOINT_N - 1) Serial.print(", ");
-          else Serial.println();
+        if (DEBUG_LEVEL >= 2) {
+          for(byte i = 0; i < JOINT_N - 1; i++) {
+            Serial.print(servosPos[i]);
+            if (i < JOINT_N - 1) Serial.print(", ");
+            else Serial.println();
+          }
         }
+        MoveServosToPos(servosPos, true);
         for (byte i = 0; i < JOINT_N - 1; i++) { // Перезаписать значения старых позиций для следующей итерации
             servosPosOld[i] = servosPos[i];
         }
@@ -238,10 +253,14 @@ void ManualControl(int type) {
   }
 }
 
-int ConvertDegreesToGoalPos(float degPos) {
-  // 30, 300 - мертвые зоны диномикселя
-  degPos = constrain(degPos, 30, 300); // Ограничиваем входное значение, где 30° - это начальный градус слева и 300°
-  int goalPos = map(degPos, 30, 300, 0, 1024);
+int ConvertDegreesToGoalPos(int degPos) {
+  // .. > 30, 330 < .. - физически мертвые зоны диномикселя
+  // Динамиксель команду 1023 - не выполняет, соотвественно 511 средняя позиция, а не как пишет документация 512
+  degPos = constrain(degPos, 0, 300); // Ограничиваем входное значение, где 30° - это начальный градус слева и 300°
+  int goalPos = map(degPos, 0, 300, 0, 1022);
+  if (DEBUG_LEVEL >= 2) {
+    DEBUG_SERIAL.print("inputDegPos: "); DEBUG_SERIAL.print(degPos); DEBUG_SERIAL.print(", "); DEBUG_SERIAL.print("goalPos: "); DEBUG_SERIAL.println(goalPos);
+  }
   return goalPos;
 }
 
