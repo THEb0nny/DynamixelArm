@@ -200,23 +200,23 @@ void ManualControl(int type) {
         } else if (key[i] == "m2" && type == 2) {
           if (servosPos[1] != values[i]) servosPos[1] = ConvertDegreesToGoalPos(values[i]);
         } else if (key[i] == "m2r" && type == 2) {
-          if (servosPos[0] != values[i]) servosPos[1] = values[i];
+          if (servosPos[1] != values[i]) servosPos[1] = values[i];
         } else if (key[i] == "m3" && type == 2) {
           if (servosPos[2] != values[i]) servosPos[2] = ConvertDegreesToGoalPos(values[i]);
         } else if (key[i] == "m3r" && type == 2) {
-          if (servosPos[0] != values[i]) servosPos[2] = values[i];
+          if (servosPos[2] != values[i]) servosPos[2] = values[i];
         } else if (key[i] == "m4" && type == 2) {
           if (servosPos[3] != values[i]) servosPos[3] = ConvertDegreesToGoalPos(values[i]);
         } else if (key[i] == "m4r" && type == 2) {
-          if (servosPos[0] != values[i]) servosPos[3] = values[i];
+          if (servosPos[3] != values[i]) servosPos[3] = values[i];
         } else if (key[i] == "m5" && type == 2) {
           if (servosPos[4] != values[i]) servosPos[4] = ConvertDegreesToGoalPos(values[i]);
         } else if (key[i] == "m5r" && type == 2) {
-          if (servosPos[0] != values[i]) servosPos[4] = values[i];
+          if (servosPos[4] != values[i]) servosPos[4] = values[i];
         } else if (key[i] == "m6" && type == 2) {
           if (servosPos[5] != values[i]) servosPos[5] = ConvertDegreesToGoalPos(values[i]);
         } else if (key[i] == "m6r" && type == 2) {
-          if (servosPos[0] != values[i]) servosPos[5] = values[i];
+          if (servosPos[5] != values[i]) servosPos[5] = values[i];
         } else if (key[i] == "break") {
           Serial.println(key[i]);
           control = false;
