@@ -119,9 +119,11 @@ float* Manipulator_IK(float x, float y, float z) {
     Serial.print("k = "); Serial.println(k);
     Serial.print("z_solve = "); Serial.println(z_solve);
     Serial.print("d = "); Serial.println(d);
+    Serial.print("a1 = "); Serial.println(a1);
     Serial.print("a2 = "); Serial.println(a2);
     Serial.print("a3 = "); Serial.println(a3);
     Serial.print("a4 = "); Serial.println(a4);
+    Serial.print("a5 = "); Serial.println(a5);
   }
   float *ik = new float[JOINT_N - 1];
   ik[0] = a1, ik[1] = a2, ik[2] = a3, ik[3] = a4, ik[4] = a5;
