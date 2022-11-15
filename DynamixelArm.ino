@@ -29,7 +29,7 @@
 
 // Длины звеньев манипуля
 #define LINK1 102.5
-#define LINK2 105
+#define LINK2 105.0
 #define LINK3 79.5
 #define LINK4 65.2
 #define LINK5 100.6
