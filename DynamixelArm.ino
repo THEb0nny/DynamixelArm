@@ -31,7 +31,7 @@
 #define LINK1 102.5
 #define LINK2 105.0
 #define LINK3 79.5
-#define LINK4 65.2
+#define LINK4 65.65
 #define LINK5 100.6
 
 // Для светодиодов на плате расширения, которые от земли
