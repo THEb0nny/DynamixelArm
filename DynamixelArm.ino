@@ -107,13 +107,13 @@ void loop() {
 
 // Функция обратной кинематики
 float* Manipulator_IK(float x, float y, float z) {
-  float a1 = degrees(actg(y / x));
+  float a1 = degrees(atan(y / x));
   float k = sqrtf(pow(x, 2) + pow(y, 2));
-  //float z_solve = z + LINK4 - LINK1;
-  float z_solve = z + LINK4 + LINK5 - LINK1;
-  float d = sqrt(pow(k, 2) + pow(z_solve, 2));
-  float a2 = 90 - degrees(actg(radians(z_solve / k)) + acos(radians((pow(d, 2) + pow(LINK2, 2) - pow(LINK3, 2)) / (2 * d * LINK2))));
-  float a3 = 180 - degrees(acos(radians((-pow(d, 2) + pow(LINK2, 2) + pow(LINK3, 2)) / (2 * LINK2 * LINK3))));
+  float z_solve = z + (LINK4 + LINK5) - LINK1;
+  float d = sqrtf(pow(k, 2) + pow(z_solve, 2));
+  Serial.println(z_solve / k);
+  float a2 = 90 - degrees(atan(z_solve / k) + acos((pow(d, 2) + pow(LINK2, 2) - pow(LINK3, 2)) / (2 * d * LINK2)));
+  float a3 = 180 - degrees(acos((-pow(d, 2) + pow(LINK2, 2) + pow(LINK3, 2)) / (2 * LINK2 * LINK3)));
   float a4 = 180 - (a2 + a3);
   float a5 = a1;
   if (DEBUG_LEVEL >= 2) {
@@ -411,17 +411,4 @@ void WaitServosPosPerformed() {
     delay(50);
   }
   serialPrintTimer.stop(); // Остановить таймер печати
-}
-
-// Находим котангенс числа
-float ctg(x) {
-  // ctg = 1 / tn
-  return 1 / tan(x);
-}
-
-// Находим арктангенс числа
-float actg(float x) {
-  // a = atan(z); // Считаем арктангенс
-  // a = M_PI_2 - a; // По формулам приведения делаем из арктангенса арккатангенс
-  return M_PI_2 - atan(x);
 }
