@@ -107,23 +107,29 @@ void loop() {
 
 // Функция обратной кинематики
 float* Manipulator_IK(float x, float y, float z) {
+  float z_solve = z + LINK4 - LINK1;
   float k = sqrtf(pow(x, 2) + pow(y, 2));
-  float z_solve = z + (LINK4 + LINK5) - LINK1;
   float d = sqrtf(pow(k, 2) + pow(z_solve, 2));
-  float a1 = degrees(atan(y / x));
-  float a2 = degrees(M_PI_2 - (atan(z_solve / k) + acos((pow(d, 2) + pow(LINK2, 2) - pow(LINK3, 2)) / (2 * d * LINK2))));
-  float a3 = degrees(M_PI - (acos((-pow(d, 2) + pow(LINK2, 2) + pow(LINK3, 2)) / (2 * LINK2 * LINK3))));
-  float a4 = M_PI - (a2 + a3);
+  
+  float a1 = atan(x / y);
+  float a2 = (PI / 2) - (atan(z_solve / k) + acos((pow(d, 2) + pow(LINK2, 2) - pow(LINK3, 2)) / (2 * d * LINK2)));
+  float a3 = PI - (acos((-pow(d, 2) + pow(LINK2, 2) + pow(LINK3, 2)) / (2 * LINK2 * LINK3)));
+  float a4 = PI - (a2 + a3);
   float a5 = a1;
   if (DEBUG_LEVEL >= 2) {
     Serial.print("k = "); Serial.println(k);
-    Serial.print("z = "); Serial.println(z);
-    Serial.print("d = "); Serial.println(d);
-    Serial.print("a1 = "); Serial.println(a1);
-    Serial.print("a2 = "); Serial.println(a2);
-    Serial.print("a3 = "); Serial.println(a3);
-    Serial.print("a4 = "); Serial.println(a4);
-    Serial.print("a5 = "); Serial.println(a5);
+    Serial.print("z_solve = "); Serial.println(z_solve);
+    Serial.print("d = "); Serial.println(d); Serial.println();
+    Serial.print("a1_rad = "); Serial.println(a1);
+    Serial.print("a2_rad = "); Serial.println(a2);
+    Serial.print("a3_rad = "); Serial.println(a3);
+    Serial.print("a4_rad = "); Serial.println(a4);
+    Serial.print("a5_rad = "); Serial.println(a5);
+    Serial.print("a1_deg = "); Serial.println(degrees(a1));
+    Serial.print("a2_deg = "); Serial.println(degrees(a2));
+    Serial.print("a3_deg = "); Serial.println(degrees(a3));
+    Serial.print("a4_deg = "); Serial.println(degrees(a4));
+    Serial.print("a5_Deg = "); Serial.println(degrees(a5));
   }
   float *ik = new float[JOINT_N - 1];
   ik[0] = a1, ik[1] = a2, ik[2] = a3, ik[3] = a4, ik[4] = a5;
