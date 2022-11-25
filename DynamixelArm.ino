@@ -56,7 +56,7 @@ void setup() {
   digitalWrite(EXP_BOARD_LED1_PIN, LED_LOW); // Выключаем светодиод 1 на плате расширения
   digitalWrite(EXP_BOARD_LED2_PIN, LED_LOW); // Выключаем светодиод 2 на плате расширения
   digitalWrite(EXP_BOARD_LED3_PIN, LED_LOW); // Выключаем светодиод 3 на плате расширения
-  DEBUG_SERIAL.println("Wait press btn1 or btn2...");
+  DEBUG_SERIAL.println("Wait press btn1 (auto mode) or btn2 (manual control)...");
   while(true) {
     if (digitalRead(EXP_BOARD_BUTTON1_PIN) == 1) { // Автоматический режим демонтрации
       workMode = 1;
@@ -98,7 +98,7 @@ void setup() {
   SetAllServosSpeed(60); // Установить всем сервоприводам скорость
   // Занять среднюю позицию всем сервоприводам
   float presentServosPos[] = {512, 512, 512, 512, 512, -1};
-  MoveServosToPos(presentServosPos, true);
+  MoveServosToGoalPos(presentServosPos, true);
 }
 
 void loop() {
@@ -157,7 +157,7 @@ float* Manipulator_FK(float a1, float a2, float a3, float a4) {
 void ManualControl(int type) {
   float* servosPos = new float[JOINT_N];
   float* servosPosOld = new float[JOINT_N];
-  for (byte i = 0; i < JOINT_N; i++) {
+  for (byte i = 0; i < JOINT_N; i++) { // Изначально задать в массиве средние значения для позий диномикселей
     servosPos[i] = 512;
     servosPosOld[i] = 512;
   }
@@ -201,9 +201,9 @@ void ManualControl(int type) {
           if (y != values[i]) y = values[i]; // Записываем Y
         } else if (key[i] == "z" && type == 1) {
           if (z != values[i]) z = values[i]; // Записываем Z
-        } else if (key[i] == "m1" && type == 2) {
+        } else if (key[i] == "m1" && type == 2) { // Значение первого диномикселя в градусах, котоое переконвертировано в позицию
           if (servosPos[0] != values[i]) servosPos[0] = ConvertDegreesToGoalPos(values[i]);
-        } else if (key[i] == "m1r" && type == 2) {
+        } else if (key[i] == "m1r" && type == 2) { // Сырое значение первого диномикселя, т.е. goal position
           if (servosPos[0] != values[i]) servosPos[0] = values[i];
         } else if (key[i] == "m2" && type == 2) {
           if (servosPos[1] != values[i]) servosPos[1] = ConvertDegreesToGoalPos(values[i]);
@@ -225,7 +225,7 @@ void ManualControl(int type) {
           if (servosPos[5] != values[i]) servosPos[5] = ConvertDegreesToGoalPos(values[i]);
         } else if (key[i] == "m6r" && type == 2) {
           if (servosPos[5] != values[i]) servosPos[5] = values[i];
-        } else if (key[i] == "break") {
+        } else if (key[i] == "break") { // Выходим из цикла
           Serial.println(key[i]);
           control = false;
           delete[] servosPos;
@@ -236,22 +236,33 @@ void ManualControl(int type) {
           Serial.print(key[i]); Serial.print(" = "); Serial.println(values[i]); // Печать ключ и значение, если ключ существует
         }
       }
-      if (type == 1) { // Тип работы по координатам X, Y, Z
-        servosPos = Manipulator_IK(x, y, z);
-        if (DEBUG_LEVEL >= 2) {
+       // Тип работы по координатам X, Y, Z
+      if (type == 1) {
+        servosPos = Manipulator_IK(x, y, z);     
+        if (DEBUG_LEVEL >= 2) { // Вывод значения углов диномикселей после получения от функции ИК
           for(byte i = 0; i < JOINT_N - 1; i++) {
             Serial.print(servosPos[i]);
             if (i < JOINT_N - 1) Serial.print(", ");
             else Serial.println();
           }
         }
-        MoveServosToPos(servosPos, true);
-        for (byte i = 0; i < JOINT_N - 1; i++) { // Перезаписать значения старых позиций для следующей итерации
+        for (byte i = 0; i < JOINT_N; i++) { // Перевести и переконвертировать значение Goal Position
+          servosPos[i] = ConvertDegreesToGoalPos(512 + servosPos[i]); // Среднее положение 512
+        }
+        if (DEBUG_LEVEL >= 2) { // Вывод значения углов диномикселей после получения от функции ИК
+          for(byte i = 0; i < JOINT_N - 1; i++) {
+            Serial.print(servosPos[i]);
+            if (i < JOINT_N - 1) Serial.print(", ");
+            else Serial.println();
+          }
+        }
+        MoveServosToGoalPos(servosPos, true); // Занять диномикселям позицию
+        for (byte i = 0; i < JOINT_N - 1; i++) { // Перезаписать значения старых позиций с текущей итерации для следующей итерации
             servosPosOld[i] = servosPos[i];
         }
       } else if (type == 2) { // Тип работы по позициям на диномиксели
         if (servosPos[0] != servosPosOld[0] || servosPos[1] != servosPosOld[1] || servosPos[2] != servosPosOld[2] || servosPos[3] != servosPosOld[3] || servosPos[4] != servosPosOld[4] || servosPos[5] != servosPosOld[5] || servosPos[6] != servosPosOld[6]) {
-          MoveServosToPos(servosPos, true);
+          MoveServosToGoalPos(servosPos, true);
           for (byte i = 0; i < JOINT_N; i++) { // Перезаписать значения старых позиций для следующей итерации
             servosPosOld[i] = servosPos[i];
           }
@@ -301,7 +312,7 @@ void MoveServoToPos(byte servoId, float posDeg) {
 }
 
 // Сервоприводам занять позиции
-void MoveServosToPos(float *servosTargetPos, bool waitPerformedPos) {
+void MoveServosToGoalPos(float *servosTargetPos, bool waitPerformedPos) {
   if (DEBUG_LEVEL >= 1) DEBUG_SERIAL.print("Target servos pos: ");
   for (byte i = 0; i < JOINT_N; i++) {
     if (servosTargetPos[i] != -1 && servosTargetPos[i] < 1023) { // Пропустить шаг цикла, если значение для него с массива 0-е
@@ -330,12 +341,12 @@ int* GetServosPos() {
 }
 
 // Получить значения о движения сервопривода
-bool GetServoMoving(byte servoId) {
+bool GetServoMovingStatus(byte servoId) {
   return dxl.readControlTableItem(MOVING, servoId);
 }
 
 // Получить значения о движении сервоприводов
-bool* GetServosMoving() {
+bool* GetServosMovingStatus() {
   bool* movingStates = new bool[JOINT_N];
   for (byte i = 0; i < JOINT_N; i++) {
     movingStates[i] = dxl.readControlTableItem(MOVING, i + 1);
@@ -360,14 +371,15 @@ int* GetServosTargetPos() {
 // Ждать пока сервомоторы не займут позиции
 void WaitServosPosPerformed() {
   int* presentServosPos = new int[JOINT_N];
-  int* targetServosPos = GetServosTargetPos(); // Получить целевые позиции с сервоприводов
+  //int* targetServosPos = GetServosTargetPos(); // Получить целевые позиции с сервоприводов
   servosWorksMaxTimeTimer.setTimeout(MAX_TIME_PERFORMED_POS); // Установка времени таймера защиты по максимальному времени, запуск таймера
   servosWorksMaxTimeTimer.reset(); // Спросить таймера защиты
   serialPrintTimer.setInterval(200); // Установить таймер печати
   serialPrintTimer.reset(); // Спросить таймер печати
   if (DEBUG_LEVEL >= 1) DEBUG_SERIAL.println("Current servos position: ");
   while (true) {
-    int* presentServosPos = GetServosPos(); // Прочитать значения с диномикселей
+    //int* presentServosPos = GetServosPos(); // Прочитать значения с диномикселей
+    presentServosPos = GetServosPos(); // Прочитать значения с диномикселей
     if (DEBUG_LEVEL >= 1 && serialPrintTimer.isReady()) {
       for (byte i = 0; i < JOINT_N; i++) { // Вывод текущих положений с сервоприводов
         DEBUG_SERIAL.print(presentServosPos[i]);
@@ -375,7 +387,7 @@ void WaitServosPosPerformed() {
         else DEBUG_SERIAL.println();
       }
     }
-    bool* isMoving = GetServosMoving(); // Прочитать значения о состоянии движений
+    bool* isMoving = GetServosMovingStatus(); // Прочитать значения о состоянии движений
     if (DEBUG_LEVEL >= 2 && serialPrintTimer.isReady()) {
       for (byte i = 0; i < JOINT_N; i++) { // Вывод значений о движении сервоприводов
         DEBUG_SERIAL.print(isMoving[i]); // 1 - движение, 0 - движения нет
