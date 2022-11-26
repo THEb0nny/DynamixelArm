@@ -58,13 +58,13 @@ void setup() {
   digitalWrite(EXP_BOARD_LED3_PIN, LED_LOW); // Выключаем светодиод 3 на плате расширения
   DEBUG_SERIAL.println("Wait press btn1 (auto mode) or btn2 (manual control)...");
   while(true) {
-    if (digitalRead(EXP_BOARD_BUTTON1_PIN) == 1) { // Автоматический режим демонтрации
+    if (digitalRead(EXP_BOARD_BUTTON1_PIN) == 1) { // Режим управления по x y z с решением ИК
       workMode = 1;
-      break; // Кнопка 1 на плате расширения
+      break; // Кнопка 1 на плате расширения - 16
     }
-    if (digitalRead(EXP_BOARD_BUTTON2_PIN) == 1) { // Режим управления
+    if (digitalRead(EXP_BOARD_BUTTON2_PIN) == 1) { // Режим управления диномикселями
       workMode = 2;
-      break; // Кнопка 2 на плате расширения
+      break; // Кнопка 2 на плате расширения - 17
     }
   }
   DEBUG_SERIAL.println("Setup...");
@@ -117,6 +117,7 @@ float* Manipulator_IK(float x, float y, float z) {
   float a4 = PI - (a2 + a3);
   float a5 = a1;
   if (DEBUG_LEVEL >= 2) {
+    Serial.println("IK");
     Serial.print("k = "); Serial.println(k);
     Serial.print("z_solve = "); Serial.println(z_solve);
     Serial.print("d = "); Serial.println(d); Serial.println();
@@ -129,10 +130,10 @@ float* Manipulator_IK(float x, float y, float z) {
     Serial.print("a2_deg = "); Serial.println(degrees(a2));
     Serial.print("a3_deg = "); Serial.println(degrees(a3));
     Serial.print("a4_deg = "); Serial.println(degrees(a4));
-    Serial.print("a5_Deg = "); Serial.println(degrees(a5));
+    Serial.print("a5_deg = "); Serial.println(degrees(a5));
   }
   float *ik = new float[JOINT_N - 1];
-  ik[0] = a1, ik[1] = a2, ik[2] = a3, ik[3] = a4, ik[4] = a5;
+  ik[0] = degrees(a1), ik[1] = degrees(a2), ik[2] = degrees(a3), ik[3] = degrees(a4), ik[4] = degrees(a5);
   return ik;
 }
 
@@ -180,6 +181,7 @@ void ManualControl(int type) {
       for (byte i = 0; i < MAX_INPUT_VAL_IN_MANUAL_CONTROL; i++) {
         inputValues[i] = (i == 0 ? String(strtok(strBuffer, " ")) : String(strtok(NULL, " ")));
         inputValues[i].replace(" ", ""); // Убрать возможные пробелы между символами
+        /*
         if (DEBUG_LEVEL >= 2) {
           if (inputValues[i] != "") {
             if (i > 0) Serial.print(", ");
@@ -187,6 +189,7 @@ void ManualControl(int type) {
           }
           if (i == MAX_INPUT_VAL_IN_MANUAL_CONTROL - 1) Serial.println();
         }
+        */
       }
       for (byte i = 0; i < MAX_INPUT_VAL_IN_MANUAL_CONTROL; i++) {
         if (inputValues[i] == "") continue; // Если значение пустое, то перейти на следующий шаг цикла
@@ -238,24 +241,12 @@ void ManualControl(int type) {
       }
        // Тип работы по координатам X, Y, Z
       if (type == 1) {
-        servosPos = Manipulator_IK(x, y, z);     
-        if (DEBUG_LEVEL >= 2) { // Вывод значения углов диномикселей после получения от функции ИК
-          for(byte i = 0; i < JOINT_N - 1; i++) {
-            Serial.print(servosPos[i]);
-            if (i < JOINT_N - 1) Serial.print(", ");
-            else Serial.println();
-          }
-        }
+        servosPos = Manipulator_IK(x, y, z);
+        Serial.println();
         for (byte i = 0; i < JOINT_N; i++) { // Перевести и переконвертировать значение Goal Position
           servosPos[i] = ConvertDegreesToGoalPos(512 + servosPos[i]); // Среднее положение 512
         }
-        if (DEBUG_LEVEL >= 2) { // Вывод значения углов диномикселей после получения от функции ИК
-          for(byte i = 0; i < JOINT_N - 1; i++) {
-            Serial.print(servosPos[i]);
-            if (i < JOINT_N - 1) Serial.print(", ");
-            else Serial.println();
-          }
-        }
+        Serial.println();
         MoveServosToGoalPos(servosPos, true); // Занять диномикселям позицию
         for (byte i = 0; i < JOINT_N - 1; i++) { // Перезаписать значения старых позиций с текущей итерации для следующей итерации
             servosPosOld[i] = servosPos[i];
@@ -278,6 +269,7 @@ int ConvertDegreesToGoalPos(int degPos) {
   degPos = constrain(degPos, 0, 300); // Ограничиваем входное значение, где 30° - это начальный градус слева и 300°
   int goalPos = map(degPos, 0, 300, 0, 1022);
   if (DEBUG_LEVEL >= 2) {
+    Serial.println("ConvertDegreesToGoalPos: ");
     DEBUG_SERIAL.print("inputDegPos: "); DEBUG_SERIAL.print(degPos); DEBUG_SERIAL.print(", "); DEBUG_SERIAL.print("goalPos: "); DEBUG_SERIAL.println(goalPos);
   }
   return goalPos;
