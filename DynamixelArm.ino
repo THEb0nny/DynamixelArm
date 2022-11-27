@@ -7,7 +7,7 @@
 #include <math.h>
 #include "GyverTimer.h"
 
-#define DEBUG_LEVEL 2 // Уровень дебага
+#define DEBUG_LEVEL 2 // Уровень отдалки
 
 #define MAX_INPUT_VAL_IN_MANUAL_CONTROL 6 // Максимальное количество значений в строку монитора порта при ручном управлении
 
@@ -31,8 +31,7 @@
 #define LINK1 102.5
 #define LINK2 105.0
 #define LINK3 79.5
-#define LINK4 65.65
-#define LINK5 100.6
+#define LINK4 166.4
 
 // Для светодиодов на плате расширения, которые от земли
 #define LED_HIGH LOW
@@ -97,7 +96,7 @@ void setup() {
   DEBUG_SERIAL.print("Start... Work mode is "); DEBUG_SERIAL.println(workMode);
   SetAllServosSpeed(60); // Установить всем сервоприводам скорость
   // Занять среднюю позицию всем сервоприводам
-  float presentServosPos[] = {512, 512, 512, 512, 512, -1};
+  double presentServosPos[] = {512, 512, 512, 512, 512, -1};
   MoveServosToGoalPos(presentServosPos, true);
 }
 
@@ -106,16 +105,15 @@ void loop() {
 }
 
 // Функция обратной кинематики
-float* Manipulator_IK(float x, float y, float z) {
-  float z_solve = z + LINK4 - LINK1;
-  float k = sqrtf(pow(x, 2) + pow(y, 2));
-  float d = sqrtf(pow(k, 2) + pow(z_solve, 2));
-  
-  float a1 = atan(x / y);
-  float a2 = (PI / 2) - (atan(z_solve / k) + acos((pow(d, 2) + pow(LINK2, 2) - pow(LINK3, 2)) / (2 * d * LINK2)));
-  float a3 = PI - (acos((-pow(d, 2) + pow(LINK2, 2) + pow(LINK3, 2)) / (2 * LINK2 * LINK3)));
-  float a4 = PI - (a2 + a3);
-  float a5 = a1;
+double* Manipulator_IK(float x, float y, float z) {
+  double z_solve = z + LINK4 - LINK1;
+  double k = sqrtf(pow(x, 2) + pow(y, 2));
+  double d = sqrtf(pow(k, 2) + pow(z_solve, 2));
+  double a1 = atan(x / y);
+  double a2 = (PI / 2) - (atan(z_solve / k) + acos((pow(d, 2) + pow(LINK2, 2) - pow(LINK3, 2)) / (2 * d * LINK2)));
+  double a3 = PI - (acos((-pow(d, 2) + pow(LINK2, 2) + pow(LINK3, 2)) / (2 * LINK2 * LINK3)));
+  double a4 = PI - (a2 + a3);
+  double a5 = a1;
   if (DEBUG_LEVEL >= 2) {
     Serial.println("IK");
     Serial.print("k = "); Serial.println(k);
@@ -132,7 +130,7 @@ float* Manipulator_IK(float x, float y, float z) {
     Serial.print("a4_deg = "); Serial.println(degrees(a4));
     Serial.print("a5_deg = "); Serial.println(degrees(a5));
   }
-  float *ik = new float[JOINT_N - 1];
+  double *ik = new double[JOINT_N - 1];
   ik[0] = degrees(a1), ik[1] = degrees(a2), ik[2] = degrees(a3), ik[3] = degrees(a4), ik[4] = degrees(a5);
   return ik;
 }
@@ -156,8 +154,8 @@ float* Manipulator_FK(float a1, float a2, float a3, float a4) {
 
 // Управление из Serial
 void ManualControl(int type) {
-  float* servosPos = new float[JOINT_N];
-  float* servosPosOld = new float[JOINT_N];
+  double* servosPos = new double[JOINT_N];
+  double* servosPosOld = new double[JOINT_N];
   for (byte i = 0; i < JOINT_N; i++) { // Изначально задать в массиве средние значения для позий диномикселей
     servosPos[i] = 512;
     servosPosOld[i] = 512;
@@ -263,7 +261,7 @@ void ManualControl(int type) {
   }
 }
 
-int ConvertDegreesToGoalPos(int degPos) {
+int ConvertDegreesToGoalPos(double degPos) {
   // .. > 30, 330 < .. - физически мертвые зоны диномикселя
   // Динамиксель команду 1023 - не выполняет, соотвественно 511 средняя позиция, а не как пишет документация 512
   degPos = constrain(degPos, 0, 300); // Ограничиваем входное значение, где 30° - это начальный градус слева и 300°
@@ -298,13 +296,13 @@ void SetAllServosSpeed(int speed) {
 }
 
 // Сервоприводу занять позицию
-void MoveServoToPos(byte servoId, float posDeg) {
+void MoveServoToPos(byte servoId, double posDeg) {
   bool status = dxl.setGoalPosition(servoId, posDeg); // Задание целевого положения
   //if (status) DEBUG_SERIAL.println();
 }
 
 // Сервоприводам занять позиции
-void MoveServosToGoalPos(float *servosTargetPos, bool waitPerformedPos) {
+void MoveServosToGoalPos(double *servosTargetPos, bool waitPerformedPos) {
   if (DEBUG_LEVEL >= 1) DEBUG_SERIAL.print("Target servos pos: ");
   for (byte i = 0; i < JOINT_N; i++) {
     if (servosTargetPos[i] != -1 && servosTargetPos[i] < 1023) { // Пропустить шаг цикла, если значение для него с массива 0-е
