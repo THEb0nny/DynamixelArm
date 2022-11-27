@@ -244,7 +244,7 @@ void ManualControl(int type) {
         servosPos = Manipulator_IK(x, y, z);
         Serial.println();
         for (byte i = 0; i < JOINT_N; i++) { // Перевести и переконвертировать значение Goal Position
-          servosPos[i] = ConvertDegreesToGoalPos(512 + servosPos[i]); // Среднее положение 512
+          servosPos[i] = ConvertDegreesToGoalPos(90 + servosPos[i]); // Среднее положение 512
         }
         Serial.println();
         MoveServosToGoalPos(servosPos, true); // Занять диномикселям позицию
