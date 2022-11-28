@@ -18,6 +18,7 @@
 #define DXL_PROTOCOL_VERSION 1.0 // Инициализация переменной, отвечащей за протокол передачи данных от OpenCM9.04 к приводам
 
 #define JOINT_N 6 // Количество приводов
+#define DYNAMIXEL_DEG_OFFSET 30 // Оступ начала 0 позиции в градусах от разворота диномикселя
 #define DYNAMIXEL_GOAL_POS_ERROR 3 // Погрешность позиции для динимикселей
 #define MAX_TIME_PERFORMED_POS 7000 // Максимальное время для занятия ошибка, защита
 
@@ -60,8 +61,7 @@ void setup() {
     if (digitalRead(EXP_BOARD_BUTTON1_PIN) == 1) { // Режим управления по x y z с решением ИК
       workMode = 1;
       break; // Кнопка 1 на плате расширения - 16
-    }
-    if (digitalRead(EXP_BOARD_BUTTON2_PIN) == 1) { // Режим управления диномикселями
+    } else if (digitalRead(EXP_BOARD_BUTTON2_PIN) == 1) { // Режим управления диномикселями
       workMode = 2;
       break; // Кнопка 2 на плате расширения - 17
     }
@@ -74,26 +74,23 @@ void setup() {
   for (int i = 0; i < JOINT_N; i++) { // Цикл для перебора всех приводов
     while (true) {
       if(dxl.ping(i + 1) == true) { // Проверка отвечает ли мотор
-        DEBUG_SERIAL.print("Dynamixel width ID "); DEBUG_SERIAL.print(i + 1); DEBUG_SERIAL.print(" found, model "); DEBUG_SERIAL.print(dxl.getModelNumber(i + 1)); DEBUG_SERIAL.println(".");
+        DEBUG_SERIAL.println("Dynamixel width ID " + String(i + 1) + " found, model " + String(dxl.getModelNumber(i + 1)) + ".");
         //dxl.setBaudrate(i + 1, 1000000); // Установка битрейта, установится если только битрейт dxl.begin был такой же, что и на моторах
         break;
-      } else {
-        if (serialPrintTimer.isReady()) {
-          DEBUG_SERIAL.print("Dynamixel width ID "); DEBUG_SERIAL.print(i + 1); DEBUG_SERIAL.print(" not found!"); DEBUG_SERIAL.println(" Wait...");
-        }
-        delay(10);
+      } else if (serialPrintTimer.isReady()) {
+        DEBUG_SERIAL.println("Dynamixel width ID " + String(i + 1) + " not found! Wait...");
       }
     }
     while (true) { // Установить режим работы
       dxl.torqueOff(i + 1); // Отключение крутящего момента, чтобы установить режим работы!
       bool setDinamixelOperationMode = dxl.setOperatingMode(i + 1, OP_POSITION); // Установка режима работы привода в качестве шарнира
       if (!setDinamixelOperationMode && serialPrintTimer.isReady()) {
-        DEBUG_SERIAL.print("Dynamixel width ID "); DEBUG_SERIAL.print(i + 1); DEBUG_SERIAL.println(" mode not set!");
+        DEBUG_SERIAL.println("Dynamixel width ID" + String(i + 1) + " mode not set!");
       } else break;
     }
     dxl.torqueOn(i + 1); // Включение крутящего момента
   }
-  DEBUG_SERIAL.print("Start... Work mode is "); DEBUG_SERIAL.println(workMode);
+  DEBUG_SERIAL.println("Start... Work mode is " + String(workMode));
   SetAllServosSpeed(60); // Установить всем сервоприводам скорость
   // Занять среднюю позицию всем сервоприводам
   double presentServosPos[] = {512, 512, 512, 512, 512, -1};
@@ -115,20 +112,20 @@ double* Manipulator_IK(float x, float y, float z) {
   double a4 = PI - (a2 + a3);
   double a5 = a1;
   if (DEBUG_LEVEL >= 2) {
-    Serial.println("IK");
-    Serial.print("k = "); Serial.println(k);
-    Serial.print("z_solve = "); Serial.println(z_solve);
-    Serial.print("d = "); Serial.println(d); Serial.println();
-    Serial.print("a1_rad = "); Serial.println(a1);
-    Serial.print("a2_rad = "); Serial.println(a2);
-    Serial.print("a3_rad = "); Serial.println(a3);
-    Serial.print("a4_rad = "); Serial.println(a4);
-    Serial.print("a5_rad = "); Serial.println(a5);
-    Serial.print("a1_deg = "); Serial.println(degrees(a1));
-    Serial.print("a2_deg = "); Serial.println(degrees(a2));
-    Serial.print("a3_deg = "); Serial.println(degrees(a3));
-    Serial.print("a4_deg = "); Serial.println(degrees(a4));
-    Serial.print("a5_deg = "); Serial.println(degrees(a5));
+    DEBUG_SERIAL.println("IK:");
+    DEBUG_SERIAL.println("k = " + String(k));
+    DEBUG_SERIAL.println("z_solve = " + String(z_solve));
+    DEBUG_SERIAL.println("d = " + String(d));
+    DEBUG_SERIAL.println("a1_rad = " + String(a1));
+    DEBUG_SERIAL.println("a2_rad = " + String(a2));
+    DEBUG_SERIAL.println("a3_rad = " + String(a3));
+    DEBUG_SERIAL.println("a4_rad = " + String(a4));
+    DEBUG_SERIAL.println("a5_rad = " + String(a5));
+    DEBUG_SERIAL.println("a1_deg = " + String(degrees(a1)));
+    DEBUG_SERIAL.println("a2_deg = " + String(degrees(a2)));
+    DEBUG_SERIAL.println("a3_deg = " + String(degrees(a3)));
+    DEBUG_SERIAL.println("a4_deg = " + String(degrees(a4)));
+    DEBUG_SERIAL.println("a5_deg = " + String(degrees(a5)));
   }
   double *ik = new double[JOINT_N - 1];
   ik[0] = degrees(a1), ik[1] = degrees(a2), ik[2] = degrees(a3), ik[3] = degrees(a4), ik[4] = degrees(a5);
@@ -136,18 +133,18 @@ double* Manipulator_IK(float x, float y, float z) {
 }
 
 // Функция прямой кинематики
-float* Manipulator_FK(float a1, float a2, float a3, float a4) {
-  float x_a = LINK1 * cos(a1);
-  float y_a = LINK1 * sin(a1);
-  float x_ba = LINK2 * cos(a1 + a2);
-  float y_ba = LINK2 * sin(a1 + a2);
-  float x_cba = LINK3 * cos(a1 + a2 + a3);
-  float y_cba = LINK3 * sin(a1 + a2 + a3);
-  float x_dcba = LINK4 * cos(a1 + a2 + a3 + a4);
-  float y_dcba = LINK4 * sin(a1 + a2 + a3 + a4);
-  float x = x_a + x_ba + x_cba + x_dcba;
-  float y = y_a + y_ba + y_cba + y_dcba;
-  float *fk = new float[3];
+double* Manipulator_FK(double a1, double a2, double a3, double a4) {
+  double x_a = LINK1 * cos(a1);
+  double y_a = LINK1 * sin(a1);
+  double x_ba = LINK2 * cos(a1 + a2);
+  double y_ba = LINK2 * sin(a1 + a2);
+  double x_cba = LINK3 * cos(a1 + a2 + a3);
+  double y_cba = LINK3 * sin(a1 + a2 + a3);
+  double x_dcba = LINK4 * cos(a1 + a2 + a3 + a4);
+  double y_dcba = LINK4 * sin(a1 + a2 + a3 + a4);
+  double x = x_a + x_ba + x_cba + x_dcba;
+  double y = y_a + y_ba + y_cba + y_dcba;
+  double *fk = new double[3];
   fk[0] = x, fk[1] = y; // где z?
   return fk;
 }
@@ -234,17 +231,17 @@ void ManualControl(int type) {
           break;
         }
         if (key[i].length() > 0) {
-          Serial.print(key[i]); Serial.print(" = "); Serial.println(values[i]); // Печать ключ и значение, если ключ существует
+          DEBUG_SERIAL.println(String(key[i]) + " = " + String(values[i])); // Печать ключ и значение, если ключ существует
         }
       }
        // Тип работы по координатам X, Y, Z
       if (type == 1) {
         servosPos = Manipulator_IK(x, y, z);
-        Serial.println();
+        DEBUG_SERIAL.println();
         for (byte i = 0; i < JOINT_N; i++) { // Перевести и переконвертировать значение Goal Position
           servosPos[i] = ConvertDegreesToGoalPos(90 + servosPos[i]); // Среднее положение 512
         }
-        Serial.println();
+        DEBUG_SERIAL.println();
         MoveServosToGoalPos(servosPos, true); // Занять диномикселям позицию
         for (byte i = 0; i < JOINT_N - 1; i++) { // Перезаписать значения старых позиций с текущей итерации для следующей итерации
             servosPosOld[i] = servosPos[i];
@@ -264,11 +261,22 @@ void ManualControl(int type) {
 int ConvertDegreesToGoalPos(double degPos) {
   // .. > 30, 330 < .. - физически мертвые зоны диномикселя
   // Динамиксель команду 1023 - не выполняет, соотвественно 511 средняя позиция, а не как пишет документация 512
-  degPos = constrain(degPos, 0, 300); // Ограничиваем входное значение, где 30° - это начальный градус слева и 300°
-  int goalPos = map(degPos, 0, 300, 0, 1022);
-  if (DEBUG_LEVEL >= 2) {
+  if (DEBUG_LEVEL >= 1) {
     Serial.println("ConvertDegreesToGoalPos: ");
-    DEBUG_SERIAL.print("inputDegPos: "); DEBUG_SERIAL.print(degPos); DEBUG_SERIAL.print(", "); DEBUG_SERIAL.print("goalPos: "); DEBUG_SERIAL.println(goalPos);
+    Serial.print("inputDegPos: " + String(degPos) + ", ");
+  }
+  degPos = map(degPos, 0, 360, 360, 0); // Перевернуть диапазон вращения по особенностям диномикселя
+  if (DEBUG_LEVEL >= 1) {
+    Serial.print("invertDegPos: " + String(degPos) + ", ");
+  }
+  degPos -= DYNAMIXEL_DEG_OFFSET; // Отнять значение угла стартового положения
+  degPos = constrain(degPos, 0, 300); // Ограничиваем входное значение, где 0° - это начальный градус слева и 300° конечный
+  if (DEBUG_LEVEL >= 1) {
+    Serial.print("processedDegPos: " + String(degPos) + ", ");
+  }
+  int goalPos = map(degPos, 0, 300, 0, 1023);
+  if (DEBUG_LEVEL >= 1) {
+    Serial.println("goalPos: " + String(goalPos));
   }
   return goalPos;
 }
@@ -276,14 +284,12 @@ int ConvertDegreesToGoalPos(double degPos) {
 // Установить скорость сервоприводу
 void SetServoSpeed(byte servoId, int speed) {
   bool status = dxl.setGoalVelocity(servoId, speed); // Задание целевой скорости
-  //if (status) DEBUG_SERIAL.println();
 }
 
 // Установить скорость сервоприводам
 void SetServosSpeed(float *servosSpeed) {
   for (byte i = 0; i < JOINT_N; i++) {
     bool status = dxl.setGoalVelocity(i + 1, servosSpeed[i]); // Задание целевой скорости
-    //if (status) DEBUG_SERIAL.println();
   }
 }
 
@@ -291,14 +297,12 @@ void SetServosSpeed(float *servosSpeed) {
 void SetAllServosSpeed(int speed) {
   for (byte i = 0; i < JOINT_N; i++) {
     bool status = dxl.setGoalVelocity(i + 1, speed); // Задание целевой скорости
-    //if (status) DEBUG_SERIAL.println();
   }
 }
 
 // Сервоприводу занять позицию
 void MoveServoToPos(byte servoId, double posDeg) {
   bool status = dxl.setGoalPosition(servoId, posDeg); // Задание целевого положения
-  //if (status) DEBUG_SERIAL.println();
 }
 
 // Сервоприводам занять позиции
@@ -307,11 +311,12 @@ void MoveServosToGoalPos(double *servosTargetPos, bool waitPerformedPos) {
   for (byte i = 0; i < JOINT_N; i++) {
     if (servosTargetPos[i] != -1 && servosTargetPos[i] < 1023) { // Пропустить шаг цикла, если значение для него с массива 0-е
       bool status = dxl.setGoalPosition(i + 1, servosTargetPos[i]); // Задание целевого положения
-      //if (status) DEBUG_SERIAL.println();
-      DEBUG_SERIAL.print(servosTargetPos[i]);
+      if (DEBUG_LEVEL >= 1) DEBUG_SERIAL.print(servosTargetPos[i]);
     } else DEBUG_SERIAL.print("null");
-    if (i < JOINT_N - 1) DEBUG_SERIAL.print(", ");
-    else DEBUG_SERIAL.println();
+    if (DEBUG_LEVEL >= 1) {
+      if (i < JOINT_N - 1) DEBUG_SERIAL.print(", ");
+      else DEBUG_SERIAL.println();
+    }
   }
   if (waitPerformedPos) WaitServosPosPerformed(); // Если нужно, ждать занятия сервоприводами позиции
 }
