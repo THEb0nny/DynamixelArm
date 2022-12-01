@@ -32,7 +32,7 @@
 #define LINK1 102.5
 #define LINK2 105.0
 #define LINK3 79.5
-#define LINK4 166.4
+#define LINK4 164.5
 
 // Для светодиодов на плате расширения, которые от земли
 #define LED_HIGH LOW
