@@ -44,7 +44,17 @@ GTimer serialPrintTimer(MS);
 
 using namespace ControlTableItem; // Пространство имён для обращения к параметрам диномикселей
 
-byte workMode = 1; // Режим управления
+byte robotState = 0; // Режим управления
+
+int x = 0, y = 0, z = 0, tool;
+int oldX = x, oldY = y, oldZ = z, oldTool = tool;
+
+double* servosPos = new double[JOINT_N];
+double* servosPosPrev = new double[JOINT_N];
+
+String inputValues[MAX_INPUT_VAL_IN_MANUAL_CONTROL]; // Массив входящей строки
+String key[MAX_INPUT_VAL_IN_MANUAL_CONTROL]; // Массив ключей
+int values[MAX_INPUT_VAL_IN_MANUAL_CONTROL]; // Массив значений
 
 void setup() {
   DEBUG_SERIAL.begin(57600); // Установка скорости обмена данными по последовательному порту компьютера
@@ -57,13 +67,11 @@ void setup() {
   digitalWrite(EXP_BOARD_LED2_PIN, LED_LOW); // Выключаем светодиод 2 на плате расширения
   digitalWrite(EXP_BOARD_LED3_PIN, LED_LOW); // Выключаем светодиод 3 на плате расширения
   DEBUG_SERIAL.println("Wait press btn1 (auto mode) or btn2 (manual control)...");
-  while(true) {
-    if (digitalRead(EXP_BOARD_BUTTON1_PIN) == 1) { // Режим управления по x y z с решением ИК
-      workMode = 1;
-      break; // Кнопка 1 на плате расширения - 16
-    } else if (digitalRead(EXP_BOARD_BUTTON2_PIN) == 1) { // Режим управления диномикселями
-      workMode = 2;
-      break; // Кнопка 2 на плате расширения - 17
+  while(robotState == 0) { // Цикл ожидания нажатия кнопки
+    if (digitalRead(EXP_BOARD_BUTTON1_PIN) == 1) { // Режим управления по x y z с решением ИК, кнопка 1 на плате расширения - 16
+      robotState = 1;
+    } else if (digitalRead(EXP_BOARD_BUTTON2_PIN) == 1) { // Режим управления диномикселями, кнопка 2 на плате расширения - 17
+      robotState = 2;
     }
   }
   DEBUG_SERIAL.println("Setup...");
@@ -90,15 +98,125 @@ void setup() {
     }
     dxl.torqueOn(i + 1); // Включение крутящего момента
   }
-  DEBUG_SERIAL.println("Start... Work mode is " + String(workMode));
+  
+  DEBUG_SERIAL.println("Start... State is " + String(robotState));
   SetAllServosSpeed(60); // Установить всем сервоприводам скорость
   // Занять среднюю позицию всем сервоприводам
   double presentServosPos[] = {512, 512, 512, 512, 512, -1};
   MoveServosToGoalPos(presentServosPos, true);
+  for (byte i = 0; i < JOINT_N; i++) { // Изначально задать в массиве средние значения для позий диномикселей
+    servosPos[i] = 512;
+    servosPosPrev[i] = 512;
+  }
 }
 
 void loop() {
-  ManualControl(workMode);
+  if (robotState == 1) {
+    ManualControl(1);
+  } else {
+    ManualControl(2);
+  }
+}
+
+// Управление из Serial
+void ManualControl(byte type) {
+  if (Serial.available() > 2) { // Если есть доступные данные с Serial
+    // Встроенная функция readStringUntil будет читать все данные, пришедшие в UART до специального символа — '\n' (перенос строки).
+    // Он появляется в паре с '\r' (возврат каретки) при передаче данных функцией Serial.println().
+    // Эти символы удобно передавать для разделения команд, но не очень удобно обрабатывать. Удаляем их функцией trim().
+    String inputStr = Serial.readStringUntil('\n');
+    inputStr.trim(); // Чистим символы
+    char strBuffer[99]; // Создаём пустой массив символов
+    inputStr.toCharArray(strBuffer, 99); // Перевести строку в массив символов последующего разделения по пробелам
+    // Считываем x и y разделённых пробелом, а также Z и инструментом
+    for (byte i = 0; i < MAX_INPUT_VAL_IN_MANUAL_CONTROL; i++) {
+      inputValues[i] = (i == 0 ? String(strtok(strBuffer, " ")) : String(strtok(NULL, " ")));
+      inputValues[i].replace(" ", ""); // Убрать возможные пробелы между символами
+      /*
+      if (DEBUG_LEVEL >= 2) {
+        if (inputValues[i] != "") {
+          if (i > 0) Serial.print(", ");
+          Serial.print(inputValues[i]);
+        }
+        if (i == MAX_INPUT_VAL_IN_MANUAL_CONTROL - 1) Serial.println();
+      }
+      */
+    }
+    for (byte i = 0; i < MAX_INPUT_VAL_IN_MANUAL_CONTROL; i++) {
+      if (inputValues[i] == "") continue; // Если значение пустое, то перейти на следующий шаг цикла
+      String inputValue = inputValues[i]; // Записываем в строку обрезанную часть пробелами
+      byte separatorIndexTmp = inputValue.indexOf("=");
+      byte separatorIndex = (separatorIndexTmp != 255 ? separatorIndexTmp : inputValue.length());
+      key[i] = inputValue.substring(0, separatorIndex); // Записываем ключ с начала строки до знака равно
+      values[i] = (inputValue.substring(separatorIndex + 1, inputValue.length())).toInt(); // Записываем значение с начала цифры до конца строки
+      if (type == 1) {
+        if (key[i] == "x") {
+          if (x != values[i]) x = values[i]; // Записываем X
+        } else if (key[i] == "y") {
+          if (y != values[i]) y = values[i]; // Записываем Y
+        } else if (key[i] == "z") {
+          if (z != values[i]) z = values[i]; // Записываем Z
+        } else if (key[i] == "break") { // Выходим из цикла
+          Serial.println(key[i]);
+          robotState = 0;
+          break;
+        }
+      } else if (type == 2) {
+        if (key[i] == "m1") { // Значение первого диномикселя в градусах, котоое переконвертировано в позицию
+          if (servosPos[0] != values[i]) servosPos[0] = ConvertDegreesToGoalPos(values[i]);
+        } else if (key[i] == "m1r") { // Сырое значение первого диномикселя, т.е. goal position
+          if (servosPos[0] != values[i]) servosPos[0] = values[i];
+        } else if (key[i] == "m2") {
+          if (servosPos[1] != values[i]) servosPos[1] = ConvertDegreesToGoalPos(values[i]);
+        } else if (key[i] == "m2r") {
+          if (servosPos[1] != values[i]) servosPos[1] = values[i];
+        } else if (key[i] == "m3") {
+          if (servosPos[2] != values[i]) servosPos[2] = ConvertDegreesToGoalPos(values[i]);
+        } else if (key[i] == "m3r") {
+          if (servosPos[2] != values[i]) servosPos[2] = values[i];
+        } else if (key[i] == "m4") {
+          if (servosPos[3] != values[i]) servosPos[3] = ConvertDegreesToGoalPos(values[i]);
+        } else if (key[i] == "m4r") {
+          if (servosPos[3] != values[i]) servosPos[3] = values[i];
+        } else if (key[i] == "m5") {
+          if (servosPos[4] != values[i]) servosPos[4] = ConvertDegreesToGoalPos(values[i]);
+        } else if (key[i] == "m5r") {
+          if (servosPos[4] != values[i]) servosPos[4] = values[i];
+        } else if (key[i] == "m6") {
+          if (servosPos[5] != values[i]) servosPos[5] = ConvertDegreesToGoalPos(values[i]);
+        } else if (key[i] == "m6r") {
+          if (servosPos[5] != values[i]) servosPos[5] = values[i];
+        } else if (key[i] == "break") { // Выходим из цикла
+          Serial.println(key[i]);
+          robotState = 0;
+          break;
+        }
+      }
+      if (key[i].length() > 0) {
+        DEBUG_SERIAL.println(String(key[i]) + " = " + String(values[i])); // Печать ключ и значение, если ключ существует
+      }
+    }
+    // Тип работы по координатам X, Y, Z
+    if (type == 1) {
+      servosPos = Manipulator_IK(x, y, z); // Расчитать значения углов сервоприводов функцией Обратной кинематики
+      DEBUG_SERIAL.println();
+      for (byte i = 0; i < JOINT_N; i++) { // Перевести и переконвертировать значение Goal Position
+        servosPos[i] = ConvertDegreesToGoalPos(90 + servosPos[i]); // Среднее положение 512
+      }
+      DEBUG_SERIAL.println();
+      MoveServosToGoalPos(servosPos, true); // Занять диномикселям позицию и ждать выполнения
+      for (byte i = 0; i < JOINT_N - 1; i++) { // Перезаписать значения старых позиций с текущей итерации для следующей итерации
+        servosPosPrev[i] = servosPos[i];
+      }
+    } else if (type == 2) { // Тип работы по позициям на диномиксели
+      if (servosPos[0] != servosPosPrev[0] || servosPos[1] != servosPosPrev[1] || servosPos[2] != servosPosPrev[2] || servosPos[3] != servosPosPrev[3] || servosPos[4] != servosPosPrev[4] || servosPos[5] != servosPosPrev[5] || servosPos[6] != servosPosPrev[6]) {
+        MoveServosToGoalPos(servosPos, true); // Занять диномикселям позицию и ждать выполнения
+        for (byte i = 0; i < JOINT_N; i++) { // Перезаписать значения старых позиций для следующей итерации
+          servosPosPrev[i] = servosPos[i];
+        }
+      }
+    }
+  }
 }
 
 // Функция обратной кинематики
@@ -149,115 +267,6 @@ double* Manipulator_FK(double a1, double a2, double a3, double a4) {
   return fk;
 }
 
-// Управление из Serial
-void ManualControl(int type) {
-  double* servosPos = new double[JOINT_N];
-  double* servosPosOld = new double[JOINT_N];
-  for (byte i = 0; i < JOINT_N; i++) { // Изначально задать в массиве средние значения для позий диномикселей
-    servosPos[i] = 512;
-    servosPosOld[i] = 512;
-  }
-  int x = 0, y = 0, z = 0, tool;
-  int oldX = x, oldY = y, oldZ = z, oldTool = tool;
-  bool control = true;
-  while (control) {
-    String inputValues[MAX_INPUT_VAL_IN_MANUAL_CONTROL]; // Массив входящей строки
-    String key[MAX_INPUT_VAL_IN_MANUAL_CONTROL]; // Массив ключей
-    int values[MAX_INPUT_VAL_IN_MANUAL_CONTROL]; // Массив значений
-    if (Serial.available() > 2) { // Если есть доступные данные
-      // Встроенная функция readStringUntil будет читать все данные, пришедшие в UART до специального символа — '\n' (перенос строки).
-      // Он появляется в паре с '\r' (возврат каретки) при передаче данных функцией Serial.println().
-      // Эти символы удобно передавать для разделения команд, но не очень удобно обрабатывать. Удаляем их функцией trim().
-      String inputStr = Serial.readStringUntil('\n');
-      inputStr.trim(); // Чистим символы
-      char strBuffer[99]; // Создаём пустой массив символов
-      inputStr.toCharArray(strBuffer, 99); // Перевести строку в массив символов последующего разделения по пробелам
-      // Считываем x и y разделённых пробелом, а также Z и инструментом
-      for (byte i = 0; i < MAX_INPUT_VAL_IN_MANUAL_CONTROL; i++) {
-        inputValues[i] = (i == 0 ? String(strtok(strBuffer, " ")) : String(strtok(NULL, " ")));
-        inputValues[i].replace(" ", ""); // Убрать возможные пробелы между символами
-        /*
-        if (DEBUG_LEVEL >= 2) {
-          if (inputValues[i] != "") {
-            if (i > 0) Serial.print(", ");
-            Serial.print(inputValues[i]);
-          }
-          if (i == MAX_INPUT_VAL_IN_MANUAL_CONTROL - 1) Serial.println();
-        }
-        */
-      }
-      for (byte i = 0; i < MAX_INPUT_VAL_IN_MANUAL_CONTROL; i++) {
-        if (inputValues[i] == "") continue; // Если значение пустое, то перейти на следующий шаг цикла
-        String inputValue = inputValues[i]; // Записываем в строку обрезанную часть пробелами
-        byte separatorIndexTmp = inputValue.indexOf("=");
-        byte separatorIndex = (separatorIndexTmp != 255 ? separatorIndexTmp : inputValue.length());
-        key[i] = inputValue.substring(0, separatorIndex); // Записываем ключ с начала строки до знака равно
-        values[i] = (inputValue.substring(separatorIndex + 1, inputValue.length())).toInt(); // Записываем значение с начала цифры до конца строки
-        if (key[i] == "x" && type == 1) {
-          if (x != values[i]) x = values[i]; // Записываем X
-        } else if (key[i] == "y" && type == 1) {
-          if (y != values[i]) y = values[i]; // Записываем Y
-        } else if (key[i] == "z" && type == 1) {
-          if (z != values[i]) z = values[i]; // Записываем Z
-        } else if (key[i] == "m1" && type == 2) { // Значение первого диномикселя в градусах, котоое переконвертировано в позицию
-          if (servosPos[0] != values[i]) servosPos[0] = ConvertDegreesToGoalPos(values[i]);
-        } else if (key[i] == "m1r" && type == 2) { // Сырое значение первого диномикселя, т.е. goal position
-          if (servosPos[0] != values[i]) servosPos[0] = values[i];
-        } else if (key[i] == "m2" && type == 2) {
-          if (servosPos[1] != values[i]) servosPos[1] = ConvertDegreesToGoalPos(values[i]);
-        } else if (key[i] == "m2r" && type == 2) {
-          if (servosPos[1] != values[i]) servosPos[1] = values[i];
-        } else if (key[i] == "m3" && type == 2) {
-          if (servosPos[2] != values[i]) servosPos[2] = ConvertDegreesToGoalPos(values[i]);
-        } else if (key[i] == "m3r" && type == 2) {
-          if (servosPos[2] != values[i]) servosPos[2] = values[i];
-        } else if (key[i] == "m4" && type == 2) {
-          if (servosPos[3] != values[i]) servosPos[3] = ConvertDegreesToGoalPos(values[i]);
-        } else if (key[i] == "m4r" && type == 2) {
-          if (servosPos[3] != values[i]) servosPos[3] = values[i];
-        } else if (key[i] == "m5" && type == 2) {
-          if (servosPos[4] != values[i]) servosPos[4] = ConvertDegreesToGoalPos(values[i]);
-        } else if (key[i] == "m5r" && type == 2) {
-          if (servosPos[4] != values[i]) servosPos[4] = values[i];
-        } else if (key[i] == "m6" && type == 2) {
-          if (servosPos[5] != values[i]) servosPos[5] = ConvertDegreesToGoalPos(values[i]);
-        } else if (key[i] == "m6r" && type == 2) {
-          if (servosPos[5] != values[i]) servosPos[5] = values[i];
-        } else if (key[i] == "break") { // Выходим из цикла
-          Serial.println(key[i]);
-          control = false;
-          delete[] servosPos;
-          delete[] servosPosOld;
-          break;
-        }
-        if (key[i].length() > 0) {
-          DEBUG_SERIAL.println(String(key[i]) + " = " + String(values[i])); // Печать ключ и значение, если ключ существует
-        }
-      }
-       // Тип работы по координатам X, Y, Z
-      if (type == 1) {
-        servosPos = Manipulator_IK(x, y, z);
-        DEBUG_SERIAL.println();
-        for (byte i = 0; i < JOINT_N; i++) { // Перевести и переконвертировать значение Goal Position
-          servosPos[i] = ConvertDegreesToGoalPos(90 + servosPos[i]); // Среднее положение 512
-        }
-        DEBUG_SERIAL.println();
-        MoveServosToGoalPos(servosPos, true); // Занять диномикселям позицию
-        for (byte i = 0; i < JOINT_N - 1; i++) { // Перезаписать значения старых позиций с текущей итерации для следующей итерации
-            servosPosOld[i] = servosPos[i];
-        }
-      } else if (type == 2) { // Тип работы по позициям на диномиксели
-        if (servosPos[0] != servosPosOld[0] || servosPos[1] != servosPosOld[1] || servosPos[2] != servosPosOld[2] || servosPos[3] != servosPosOld[3] || servosPos[4] != servosPosOld[4] || servosPos[5] != servosPosOld[5] || servosPos[6] != servosPosOld[6]) {
-          MoveServosToGoalPos(servosPos, true);
-          for (byte i = 0; i < JOINT_N; i++) { // Перезаписать значения старых позиций для следующей итерации
-            servosPosOld[i] = servosPos[i];
-          }
-        }
-      }
-    }
-  }
-}
-
 int ConvertDegreesToGoalPos(double degPos) {
   // .. > 30, 330 < .. - физически мертвые зоны диномикселя
   // Динамиксель команду 1023 - не выполняет, соотвественно 511 средняя позиция, а не как пишет документация 512
@@ -266,18 +275,12 @@ int ConvertDegreesToGoalPos(double degPos) {
     Serial.print("inputDegPos: " + String(degPos) + ", ");
   }
   degPos = map(degPos, 0, 360, 360, 0); // Перевернуть диапазон вращения по особенностям диномикселя
-  if (DEBUG_LEVEL >= 1) {
-    Serial.print("invertDegPos: " + String(degPos) + ", ");
-  }
+  if (DEBUG_LEVEL >= 1) Serial.print("invertDegPos: " + String(degPos) + ", ");
   degPos -= DYNAMIXEL_DEG_OFFSET; // Отнять значение угла стартового положения
   degPos = constrain(degPos, 0, 300); // Ограничиваем входное значение, где 0° - это начальный градус слева и 300° конечный
-  if (DEBUG_LEVEL >= 1) {
-    Serial.print("processedDegPos: " + String(degPos) + ", ");
-  }
+  if (DEBUG_LEVEL >= 1) Serial.print("processedDegPos: " + String(degPos) + ", ");
   int goalPos = map(degPos, 0, 300, 0, 1023);
-  if (DEBUG_LEVEL >= 1) {
-    Serial.println("goalPos: " + String(goalPos));
-  }
+  if (DEBUG_LEVEL >= 1) Serial.println("goalPos: " + String(goalPos));
   return goalPos;
 }
 
@@ -365,11 +368,12 @@ int* GetServosTargetPos() {
 
 // Ждать пока сервомоторы не займут позиции
 void WaitServosPosPerformed() {
-  int* presentServosPos = new int[JOINT_N];
+  int* presentServosPos = new int[JOINT_N]; // Массив значений 
+  bool* isMoving = new bool[JOINT_N]; // Массив для хранения значений о состоянии движения диномикселей
   //int* targetServosPos = GetServosTargetPos(); // Получить целевые позиции с сервоприводов
   servosWorksMaxTimeTimer.setTimeout(MAX_TIME_PERFORMED_POS); // Установка времени таймера защиты по максимальному времени, запуск таймера
   servosWorksMaxTimeTimer.reset(); // Спросить таймера защиты
-  serialPrintTimer.setInterval(200); // Установить таймер печати
+  serialPrintTimer.setInterval(200); // Установить таймер печати, т.е. каждые n секунд будет печать
   serialPrintTimer.reset(); // Спросить таймер печати
   if (DEBUG_LEVEL >= 1) DEBUG_SERIAL.println("Current servos position: ");
   while (true) {
@@ -382,7 +386,8 @@ void WaitServosPosPerformed() {
         else DEBUG_SERIAL.println();
       }
     }
-    bool* isMoving = GetServosMovingStatus(); // Прочитать значения о состоянии движений
+    //bool* isMoving = GetServosMovingStatus(); // Прочитать значения о состоянии движений
+    isMoving = GetServosMovingStatus(); // Прочитать значения о состоянии движений
     if (DEBUG_LEVEL >= 2 && serialPrintTimer.isReady()) {
       for (byte i = 0; i < JOINT_N; i++) { // Вывод значений о движении сервоприводов
         DEBUG_SERIAL.print(isMoving[i]); // 1 - движение, 0 - движения нет
@@ -409,18 +414,21 @@ void WaitServosPosPerformed() {
         }
       }
       // Удалить массивы перед выходом из цикла для очистки памяти
-      delete[] presentServosPos;
-      delete[] isMoving;
+      //delete[] presentServosPos;
+      //delete[] isMoving;
       //delete[] targetServosPos;
       //delete[] servosIsPerformed;
       break;
     }
     // Удаляем массивы для очистки памяти
-    delete[] presentServosPos;
-    delete[] isMoving;
+    //delete[] presentServosPos;
+    //delete[] isMoving;
     //delete[] targetServosPos;
     //delete[] servosIsPerformed;
     delay(50);
   }
+  // Удалить массивы перед выходом из цикла для очистки памяти
+  delete[] presentServosPos;
+  delete[] isMoving;
   serialPrintTimer.stop(); // Остановить таймер печати
 }
