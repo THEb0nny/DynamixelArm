@@ -7,9 +7,11 @@
 #include <math.h>
 #include "GyverTimer.h"
 
+using namespace ControlTableItem; // Пространство имён для обращения к параметрам диномикселей
+
 #define DEBUG_LEVEL 2 // Уровень отдалки
 
-#define MAX_INPUT_VAL_IN_MANUAL_CONTROL 6 // Максимальное количество значений в строку монитора порта при ручном управлении
+#define MAX_INPUT_VAL_AT_MANUAL_CONTROL 6 // Максимальное количество значений в строку монитора порта при ручном управлении
 
 #define DEBUG_SERIAL Serial // Установка константы, отвечающей за последовательный порт, подключаемый к компьютеру
 #define DXL_SERIAL Serial3 // OpenCM9.04 EXP Board's DXL port Serial. (To use the DXL port on the OpenCM 9.04 board, you must use Serial1 for Serial. And because of the OpenCM 9.04 driver code, you must call Serial1.setDxlMode(true); before dxl.begin();.)
@@ -17,10 +19,9 @@
 #define DXL_DIR_PIN 22 // Инициализация переменной, отвечащей за номер пина, подключенного к информационному пину приводов манипулятора
 #define DXL_PROTOCOL_VERSION 1.0 // Инициализация переменной, отвечащей за протокол передачи данных от OpenCM9.04 к приводам
 
-#define JOINT_N 6 // Количество приводов
+#define JOINT_N 6 // Количество сервоприводов
 #define DYNAMIXEL_DEG_OFFSET 30 // Оступ начала 0 позиции в градусах от разворота диномикселя
-#define DYNAMIXEL_GOAL_POS_ERROR 3 // Погрешность позиции для динимикселей
-#define MAX_TIME_PERFORMED_POS 7000 // Максимальное время для занятия ошибка, защита
+#define MAX_TIME_PERFORMED_POS 7000 // Максимальное время в мм для занятии позиции, время для защиты от невозможности занять позицию 
 
 #define EXP_BOARD_BUTTON1_PIN 16 // Пин кнопки 1 на плате расширения
 #define EXP_BOARD_BUTTON2_PIN 17 // Пин кнопки 2 на плате расширения
@@ -42,19 +43,12 @@ Dynamixel2Arduino dxl(DXL_SERIAL, DXL_DIR_PIN); // Инициализация у
 GTimer servosWorksMaxTimeTimer(MS); // Инициализация таймера защиты максимального времени цикла ожидания занятия позиции сервопривода
 GTimer serialPrintTimer(MS);
 
-using namespace ControlTableItem; // Пространство имён для обращения к параметрам диномикселей
-
 byte robotState = 0; // Режим управления
 
-int x = 0, y = 0, z = 0, tool;
-int oldX = x, oldY = y, oldZ = z, oldTool = tool;
+int x = 0, y = 0, z = 0, tool = 0;
 
-double* servosPos = new double[JOINT_N];
-double* servosPosPrev = new double[JOINT_N];
-
-String inputValues[MAX_INPUT_VAL_IN_MANUAL_CONTROL]; // Массив входящей строки
-String key[MAX_INPUT_VAL_IN_MANUAL_CONTROL]; // Массив ключей
-int values[MAX_INPUT_VAL_IN_MANUAL_CONTROL]; // Массив значений
+double* servosPos = new double[JOINT_N]; // Массив для хранения значений о нужных позициях динамикселей
+double* servosPosPrev = new double[JOINT_N]; // Массив для хранения значений старых позиций динамикселей для сравнения перед выполнением
 
 void setup() {
   DEBUG_SERIAL.begin(57600); // Установка скорости обмена данными по последовательному порту компьютера
@@ -102,25 +96,24 @@ void setup() {
   DEBUG_SERIAL.println("Start... State is " + String(robotState));
   SetAllServosSpeed(60); // Установить всем сервоприводам скорость
   // Занять среднюю позицию всем сервоприводам
-  double presentServosPos[] = {512, 512, 512, 512, 512, -1};
-  MoveServosToGoalPos(presentServosPos, true);
-  for (byte i = 0; i < JOINT_N; i++) { // Изначально задать в массиве средние значения для позий диномикселей
-    servosPos[i] = 512;
-    servosPosPrev[i] = 512;
-  }
+  double servosPos[] = {512, 512, 512, 512, 512, -1};
+  MoveServosToGoalPos(servosPos, true);
 }
 
 void loop() {
-  if (robotState == 1) {
+  if (robotState == 1) { // Управление по x, y, z
     ManualControl(1);
-  } else {
+  } else { // Управление диномикселями отдельно
     ManualControl(2);
   }
 }
 
 // Управление из Serial
-void ManualControl(byte type) {
+void ManualControl(byte workType) {
   if (Serial.available() > 2) { // Если есть доступные данные с Serial
+    String inputValues[MAX_INPUT_VAL_AT_MANUAL_CONTROL]; // Массив входящей строки
+    String key[MAX_INPUT_VAL_AT_MANUAL_CONTROL]; // Массив ключей
+    int values[MAX_INPUT_VAL_AT_MANUAL_CONTROL]; // Массив значений
     // Встроенная функция readStringUntil будет читать все данные, пришедшие в UART до специального символа — '\n' (перенос строки).
     // Он появляется в паре с '\r' (возврат каретки) при передаче данных функцией Serial.println().
     // Эти символы удобно передавать для разделения команд, но не очень удобно обрабатывать. Удаляем их функцией trim().
@@ -128,28 +121,19 @@ void ManualControl(byte type) {
     inputStr.trim(); // Чистим символы
     char strBuffer[99]; // Создаём пустой массив символов
     inputStr.toCharArray(strBuffer, 99); // Перевести строку в массив символов последующего разделения по пробелам
-    // Считываем x и y разделённых пробелом, а также Z и инструментом
-    for (byte i = 0; i < MAX_INPUT_VAL_IN_MANUAL_CONTROL; i++) {
+    // Считываем x и y разделённых пробелом, а также z и инструмент
+    for (byte i = 0; i < MAX_INPUT_VAL_AT_MANUAL_CONTROL; i++) {
       inputValues[i] = (i == 0 ? String(strtok(strBuffer, " ")) : String(strtok(NULL, " ")));
       inputValues[i].replace(" ", ""); // Убрать возможные пробелы между символами
-      /*
-      if (DEBUG_LEVEL >= 2) {
-        if (inputValues[i] != "") {
-          if (i > 0) Serial.print(", ");
-          Serial.print(inputValues[i]);
-        }
-        if (i == MAX_INPUT_VAL_IN_MANUAL_CONTROL - 1) Serial.println();
-      }
-      */
     }
-    for (byte i = 0; i < MAX_INPUT_VAL_IN_MANUAL_CONTROL; i++) {
+    for (byte i = 0; i < MAX_INPUT_VAL_AT_MANUAL_CONTROL; i++) {
       if (inputValues[i] == "") continue; // Если значение пустое, то перейти на следующий шаг цикла
       String inputValue = inputValues[i]; // Записываем в строку обрезанную часть пробелами
-      byte separatorIndexTmp = inputValue.indexOf("=");
+      byte separatorIndexTmp = inputValue.indexOf("="); // Узнаём позицию знака равно
       byte separatorIndex = (separatorIndexTmp != 255 ? separatorIndexTmp : inputValue.length());
       key[i] = inputValue.substring(0, separatorIndex); // Записываем ключ с начала строки до знака равно
       values[i] = (inputValue.substring(separatorIndex + 1, inputValue.length())).toInt(); // Записываем значение с начала цифры до конца строки
-      if (type == 1) {
+      if (workType == 1) { // Если режим 1
         if (key[i] == "x") {
           if (x != values[i]) x = values[i]; // Записываем X
         } else if (key[i] == "y") {
@@ -161,7 +145,7 @@ void ManualControl(byte type) {
           robotState = 0;
           break;
         }
-      } else if (type == 2) {
+      } else if (workType == 2) { // Если режим 2
         if (key[i] == "m1") { // Значение первого диномикселя в градусах, котоое переконвертировано в позицию
           if (servosPos[0] != values[i]) servosPos[0] = ConvertDegreesToGoalPos(values[i]);
         } else if (key[i] == "m1r") { // Сырое значение первого диномикселя, т.е. goal position
@@ -192,28 +176,22 @@ void ManualControl(byte type) {
           break;
         }
       }
-      if (key[i].length() > 0) {
-        DEBUG_SERIAL.println(String(key[i]) + " = " + String(values[i])); // Печать ключ и значение, если ключ существует
+      if (key[i].length() > 0) { // Печать ключ и значение, если ключ существует
+        DEBUG_SERIAL.println(String(key[i]) + " = " + String(values[i]));
       }
     }
-    // Тип работы по координатам X, Y, Z
-    if (type == 1) {
+    if (workType == 1) { // Если тип работы по координатам X, Y, Z, тогда решить IK и переконвертировать значения на углы
       servosPos = Manipulator_IK(x, y, z); // Расчитать значения углов сервоприводов функцией Обратной кинематики
       DEBUG_SERIAL.println();
       for (byte i = 0; i < JOINT_N; i++) { // Перевести и переконвертировать значение Goal Position
         servosPos[i] = ConvertDegreesToGoalPos(90 + servosPos[i]); // Среднее положение 512
       }
-      DEBUG_SERIAL.println();
+    }
+    // Проверка нужно ли выполнять, если значения углов пытаемся отдать теже самые
+    if (servosPos[0] != servosPosPrev[0] || servosPos[1] != servosPosPrev[1] || servosPos[2] != servosPosPrev[2] || servosPos[3] != servosPosPrev[3] || servosPos[4] != servosPosPrev[4] || servosPos[5] != servosPosPrev[5]) {
       MoveServosToGoalPos(servosPos, true); // Занять диномикселям позицию и ждать выполнения
-      for (byte i = 0; i < JOINT_N - 1; i++) { // Перезаписать значения старых позиций с текущей итерации для следующей итерации
+      for (byte i = 0; i < JOINT_N; i++) { // Перезаписать значения старых позиций с текущей итерации для следующей
         servosPosPrev[i] = servosPos[i];
-      }
-    } else if (type == 2) { // Тип работы по позициям на диномиксели
-      if (servosPos[0] != servosPosPrev[0] || servosPos[1] != servosPosPrev[1] || servosPos[2] != servosPosPrev[2] || servosPos[3] != servosPosPrev[3] || servosPos[4] != servosPosPrev[4] || servosPos[5] != servosPosPrev[5] || servosPos[6] != servosPosPrev[6]) {
-        MoveServosToGoalPos(servosPos, true); // Занять диномикселям позицию и ждать выполнения
-        for (byte i = 0; i < JOINT_N; i++) { // Перезаписать значения старых позиций для следующей итерации
-          servosPosPrev[i] = servosPos[i];
-        }
       }
     }
   }
@@ -270,7 +248,7 @@ double* Manipulator_FK(double a1, double a2, double a3, double a4) {
 int ConvertDegreesToGoalPos(double degPos) {
   // .. > 30, 330 < .. - физически мертвые зоны диномикселя
   // Динамиксель команду 1023 - не выполняет, соотвественно 511 средняя позиция, а не как пишет документация 512
-  if (DEBUG_LEVEL >= 1) {
+  if (DEBUG_LEVEL >= 1) { // Выводить входные значения
     Serial.println("ConvertDegreesToGoalPos: ");
     Serial.print("inputDegPos: " + String(degPos) + ", ");
   }
@@ -284,7 +262,7 @@ int ConvertDegreesToGoalPos(double degPos) {
   return goalPos;
 }
 
-// Установить скорость сервоприводу
+// Установить скорость сервоприводу по id
 void SetServoSpeed(byte servoId, int speed) {
   bool status = dxl.setGoalVelocity(servoId, speed); // Задание целевой скорости
 }
@@ -370,14 +348,12 @@ int* GetServosTargetPos() {
 void WaitServosPosPerformed() {
   int* presentServosPos = new int[JOINT_N]; // Массив значений 
   bool* isMoving = new bool[JOINT_N]; // Массив для хранения значений о состоянии движения диномикселей
-  //int* targetServosPos = GetServosTargetPos(); // Получить целевые позиции с сервоприводов
   servosWorksMaxTimeTimer.setTimeout(MAX_TIME_PERFORMED_POS); // Установка времени таймера защиты по максимальному времени, запуск таймера
   servosWorksMaxTimeTimer.reset(); // Спросить таймера защиты
   serialPrintTimer.setInterval(200); // Установить таймер печати, т.е. каждые n секунд будет печать
   serialPrintTimer.reset(); // Спросить таймер печати
   if (DEBUG_LEVEL >= 1) DEBUG_SERIAL.println("Current servos position: ");
   while (true) {
-    //int* presentServosPos = GetServosPos(); // Прочитать значения с диномикселей
     presentServosPos = GetServosPos(); // Прочитать значения с диномикселей
     if (DEBUG_LEVEL >= 1 && serialPrintTimer.isReady()) {
       for (byte i = 0; i < JOINT_N; i++) { // Вывод текущих положений с сервоприводов
@@ -386,7 +362,6 @@ void WaitServosPosPerformed() {
         else DEBUG_SERIAL.println();
       }
     }
-    //bool* isMoving = GetServosMovingStatus(); // Прочитать значения о состоянии движений
     isMoving = GetServosMovingStatus(); // Прочитать значения о состоянии движений
     if (DEBUG_LEVEL >= 2 && serialPrintTimer.isReady()) {
       for (byte i = 0; i < JOINT_N; i++) { // Вывод значений о движении сервоприводов
@@ -395,15 +370,7 @@ void WaitServosPosPerformed() {
         else DEBUG_SERIAL.println();
       }
     }
-    /*
-    // Проверяем, допустима ли ошибка
-    bool* servosIsPerformed = new bool[JOINT_N]; // Массив состояния о занятии позиции сервоприводами
-    for (byte i = 0; i < JOINT_N; i++) { // Проверяем условие и записываем в массив для каждого отдельного серво
-      servosIsPerformed[i] = (targetServosPos[i] - DYNAMIXEL_GOAL_POS_ERROR <= presentServosPos[i] && presentServosPos[i] <= targetServosPos[i] + DYNAMIXEL_GOAL_POS_ERROR);
-    }
-    */
     // Если все условия выполнились по серво или превышено максимальное время по таймеру, то выйти из цикла
-    // (servosIsPerformed[0] && servosIsPerformed[1] && servosIsPerformed[2]) && 
     if ((isMoving[0] == 0 && isMoving[1] == 0 && isMoving[2] == 0 && isMoving[3] == 0 && isMoving[4] == 0 && isMoving[5] == 0) || servosWorksMaxTimeTimer.isReady()) {
       if (DEBUG_LEVEL >= 1) {
         DEBUG_SERIAL.print("Motors performed position: ");
@@ -413,21 +380,11 @@ void WaitServosPosPerformed() {
           else DEBUG_SERIAL.println();
         }
       }
-      // Удалить массивы перед выходом из цикла для очистки памяти
-      //delete[] presentServosPos;
-      //delete[] isMoving;
-      //delete[] targetServosPos;
-      //delete[] servosIsPerformed;
       break;
     }
-    // Удаляем массивы для очистки памяти
-    //delete[] presentServosPos;
-    //delete[] isMoving;
-    //delete[] targetServosPos;
-    //delete[] servosIsPerformed;
-    delay(50);
+    delay(10);
   }
-  // Удалить массивы перед выходом из цикла для очистки памяти
+  // Удалить массивы перед выходом из функции для очистки памяти
   delete[] presentServosPos;
   delete[] isMoving;
   serialPrintTimer.stop(); // Остановить таймер печати
