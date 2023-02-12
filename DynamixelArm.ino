@@ -135,11 +135,11 @@ void ManualControl(byte workType) {
       values[i] = (inputValue.substring(separatorIndex + 1, inputValue.length())).toInt(); // Записываем значение с начала цифры до конца строки
       if (workType == 1) { // Если режим 1
         if (key[i] == "x") {
-          if (x != values[i]) x = values[i]; // Записываем X
+          x = values[i]; // Записываем X
         } else if (key[i] == "y") {
-          if (y != values[i]) y = values[i]; // Записываем Y
+          y = values[i]; // Записываем Y
         } else if (key[i] == "z") {
-          if (z != values[i]) z = values[i]; // Записываем Z
+          z = values[i]; // Записываем Z
         } else if (key[i] == "break") { // Выходим из цикла
           Serial.println(key[i]);
           robotState = 0;
