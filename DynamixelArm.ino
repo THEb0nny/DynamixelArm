@@ -198,12 +198,12 @@ void ManualControl(byte workType) {
       }
     }
     if (workType == 1 && robotState == 2) { // Если тип работы по координатам X, Y, Z, тогда решить IK и переконвертировать значения на углы и установлен режим работы
-      double* ik_deg = Manipulator_IK(x, y, z); // Расчитать значения углов сервоприводов функцией обратной кинематики
+      double* ikServosDeg = Manipulator_IK(x, y, z); // Расчитать значения углов сервоприводов функцией обратной кинематики
       DEBUG_SERIAL.println();
       for (byte i = 0; i < JOINT_N; i++) { // Перевести и переконвертировать значение Goal Position
         servosPos[i] = ConvertDegreesToGoalPos(90 + ik_deg[i]); // Среднее положение 512
       }
-      delete[] ik_deg; // Удалить память под массив из функции Manipulator_IK
+      delete[] ikServosDeg; // Удалить память под массив из функции Manipulator_IK
     }
     // Проверка нужно ли выполнять, если значения углов пытаемся отдать теже самые
     if (robotState == 2 && servosPos[0] != servosPosPrev[0] || servosPos[1] != servosPosPrev[1] || servosPos[2] != servosPosPrev[2] || servosPos[3] != servosPosPrev[3] || servosPos[4] != servosPosPrev[4] || servosPos[5] != servosPosPrev[5]) {
