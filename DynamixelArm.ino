@@ -64,6 +64,7 @@ void setup() {
   digitalWrite(EXP_BOARD_LED1_PIN, LED_LOW); // Выключаем светодиод 1 на плате расширения
   digitalWrite(EXP_BOARD_LED2_PIN, LED_LOW); // Выключаем светодиод 2 на плате расширения
   digitalWrite(EXP_BOARD_LED3_PIN, LED_LOW); // Выключаем светодиод 3 на плате расширения
+  /*
   DEBUG_SERIAL.println("Wait press btn1 (auto mode) or btn2 (manual control)...");
   while(workType == 0) { // Цикл ожидания нажатия кнопки
     if (digitalRead(EXP_BOARD_BUTTON1_PIN) == 1) { // Режим управления по x y z с решением ИК, кнопка 1 на плате расширения - 16
@@ -72,8 +73,10 @@ void setup() {
       workType = 2;
     }
   }
-  workType = 1;
+  */
   DEBUG_SERIAL.println("Setup...");
+  workType = 1;
+  /*
   dxl.begin(1000000); // Установка скорости обмена данными по последовательному порту манипулятора
   dxl.setPortProtocolVersion(DXL_PROTOCOL_VERSION); // Выбор протокола обмена данными
   serialPrintTimer.setInterval(500); // Установить таймер печати
@@ -99,10 +102,12 @@ void setup() {
   }
   
   DEBUG_SERIAL.println("Start... State is " + String(robotState));
-  //SetAllServosSpeed(60); // Установить всем сервоприводам скорость
-  
+  SetAllServosSpeed(80); // Установить всем сервоприводам скорость
+
+  */
   double startServosPos[] = {512, 512, 512, 512, 512, -1}; // Создаём массив с значениями при старте
-  MoveServosToGoalPos(startServosPos, true); // Занять среднюю позицию всем сервоприводам при старте
+  //MoveServosToGoalPos(startServosPos, true); // Занять среднюю позицию всем сервоприводам при старте
+  
   // Установка значений массивов позиций, с которыми работает программа
   for(byte i = 0; i < JOINT_N; i++) {
     servosPos[i] = startServosPos[i];
@@ -145,7 +150,7 @@ void ManualControl(byte workType) {
       byte separatorIndex = (separatorIndexTmp != 255 ? separatorIndexTmp : inputValue.length());
       key[i] = inputValue.substring(0, separatorIndex); // Записываем ключ с начала строки до знака равно
       values[i] = (inputValue.substring(separatorIndex + 1, inputValue.length())).toInt(); // Записываем значение с начала цифры до конца строки
-      
+
       if (workType == 1) { // Если режим работы 1
         robotState = 1; // Устанавливаем режим проверки перед работой
         if (key[i] == "x") x = values[i]; // Записываем X
@@ -192,7 +197,9 @@ void ManualControl(byte workType) {
           robotState = 0; // Режим ожидания, т.к. ключа верного не оказалось
         }
       }
-      if (robotState == 1) robotState = 2; // Устанавливаем c режима проверки на режим работы
+      if (robotState == 1) {
+        robotState = 2; // Устанавливаем c режима проверки на режим работы
+      }
       if (key[i].length() > 0) { // Печать ключ и значение, если ключ существует
         DEBUG_SERIAL.println(String(key[i]) + " = " + String(values[i]));
       }
@@ -201,13 +208,17 @@ void ManualControl(byte workType) {
       double* ikServosDeg = Manipulator_IK(x, y, z); // Расчитать значения углов сервоприводов функцией обратной кинематики
       DEBUG_SERIAL.println();
       for (byte i = 0; i < JOINT_N; i++) { // Перевести и переконвертировать значение Goal Position
-        servosPos[i] = ConvertDegreesToGoalPos(90 + ik_deg[i]); // Среднее положение 512
+        if (i == 0 || i == 4) {
+          servosPos[i] = ConvertDegreesToGoalPos(180 + ikServosDeg[i]); // От среднего положения прибавляем
+        } else {
+          servosPos[i] = ConvertDegreesToGoalPos(180 - ikServosDeg[i]); // От среднего положения вычитаем
+        }
       }
       delete[] ikServosDeg; // Удалить память под массив из функции Manipulator_IK
     }
     // Проверка нужно ли выполнять, если значения углов пытаемся отдать теже самые
     if (robotState == 2 && servosPos[0] != servosPosPrev[0] || servosPos[1] != servosPosPrev[1] || servosPos[2] != servosPosPrev[2] || servosPos[3] != servosPosPrev[3] || servosPos[4] != servosPosPrev[4] || servosPos[5] != servosPosPrev[5]) {
-      MoveServosToGoalPos(servosPos, true); // Занять диномикселям позицию и ждать выполнения
+      //MoveServosToGoalPos(servosPos, false); // Занять диномикселям позицию и ждать выполнения
       robotState = 0; // Установить режим ожидания после того, как отработали
       for (byte i = 0; i < JOINT_N; i++) { // Перезаписать значения старых позиций с текущей итерации для следующей
         servosPosPrev[i] = servosPos[i];
@@ -292,14 +303,18 @@ void SetServoSpeed(byte servoId, int speed) {
 // Установить скорость сервоприводам
 void SetServosSpeed(float *servosSpeed) {
   for (byte i = 0; i < JOINT_N; i++) {
+    dxl.torqueOff(i); // Работает?
     bool status = dxl.setGoalVelocity(i + 1, servosSpeed[i]); // Задание целевой скорости
+    dxl.torqueOn(i);
   }
 }
 
 // Установить скорость всем сервоприводам
 void SetAllServosSpeed(int speed) {
   for (byte i = 0; i < JOINT_N; i++) {
+    dxl.torqueOff(i); // Работает?
     bool status = dxl.setGoalVelocity(i + 1, speed); // Задание целевой скорости
+    dxl.torqueOn(i);
   }
 }
 
@@ -372,7 +387,7 @@ int* GetServosTargetPos() {
 // Ждать пока сервомоторы не займут позиции
 void WaitServosPosPerformed() {
   int* presentServosPos = new int[JOINT_N]{0}; // Массив значений 
-  bool* isMoving = new bool[JOINT_N]{0}; // Массив для хранения значений о состоянии движения диномикселей
+  bool* isMoving = new bool[JOINT_N]{false}; // Массив для хранения значений о состоянии движения диномикселей
   servosWorksMaxTimeTimer.setTimeout(MAX_TIME_PERFORMED_POS); // Установка времени таймера защиты по максимальному времени, запуск таймера
   servosWorksMaxTimeTimer.reset(); // Спросить таймера защиты
   if (WAIT_SERV_POS_PERF_FUNC_DEBUG) {
@@ -409,10 +424,10 @@ void WaitServosPosPerformed() {
       }
       break;
     }
-    delay(10);
+    delay(100);
   }
   // Удалить массивы перед выходом из функции для очистки памяти
-  delete[] presentServosPos;
-  delete[] isMoving;
+  //delete[] presentServosPos;
+  //delete[] isMoving;
   if (WAIT_SERV_POS_PERF_FUNC_DEBUG) serialPrintTimer.stop(); // Остановить таймер печати
 }
